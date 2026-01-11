@@ -1,0 +1,53 @@
+name: salon_app
+description: New Flutter project for my nail designer business.
+
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+
+  cupertino_icons: ^1.0.8
+  carousel_slider: ^5.0.0
+  google_maps_flutter: ^2.12.3
+  flutter_polyline_points: ^3.0.1
+  firebase_core: ^4.0.0
+  firebase_auth: ^6.0.1
+  cloud_firestore: ^6.0.0
+  google_sign_in: ^6.3.0
+  date_picker_timeline: ^1.2.5
+  provider: ^6.1.2
+  geolocator: ^12.0.0
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  intl_utils: ^2.8.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+    - assets/workers/
+    - assets/addons/
+    - assets/services/
+    - assets/flags/
+    - assets/workers/portfolios/
+
+flutter_intl:
+  enabled: true
+  main_locale: pt_BR
+  class_name: S
+  use_deferred_loading: true

@@ -1,0 +1,180 @@
+{
+  "@@locale": "es_ES",
+
+  "console_firebase_database": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+
+  "gelA": "Aplicación de Gel",
+  "acrylicA": "Aplicación de Acrílico",
+  "fiberA": "Aplicación de Fibra",
+  "gelM": "Mantenimiento de Gel",
+  "acrylicM": "Mantenimiento de Acrílico",
+  "fiberM": "Mantenimiento de Fibra",
+  "simpleVarnish": "Esmaltado Simple",
+  "gelVarnish": "Refuerzo con Esmaltado de Gel",
+  "cutilage": "Cutilaje",
+  "gelVarnishPedicure": "Pedicura con Esmaltado de Gel",
+  "simplePedicure": "Pedicura Simple",
+  "nailDecorations": "Decoraciones",
+
+  "bottom_navigationbar": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+  
+  "homeTab": "Inicio",
+  "mapsTab": "Mapas",
+  "clientsTab": "Clientes",
+  "bookingTab": "Reservas",
+  "profileTab": "Perfil",
+
+  "_carrousel_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "bookNowButton": "Reservar ahora",
+  "bookNowTitle": "Agendar Cita",
+  "bookNowSubtitle": "Programa tu cita en unos segundos",
+
+  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "openInMaps": "Abrir en Google Maps",
+  "openInMapsError": "No se pudo abrir Google Maps",
+
+  "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "title": "Geisimara Nail Designer",
+  "intro": "Manicura, Pedicura y Design de Cejas y Pestañas",
+  "start": "Comenzar",
+
+  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "viewAll": "Ver todo",
+  "offers": "Ofertas",
+  "website": "sitio web",
+  "Bspecialists": "Mejores Especialistas",
+  "Bservices": "Mejores Servicios",
+  "Aservices": "Todos los Servicios",
+  "Aspecialists": "Todos los Especialistas",
+
+  "continueWithGoogle": "Continuar con Google",
+  "startAdminMode": "Iniciar modo admin",
+  "adminModeEnabled": "Modo admin activado",
+
+  "continueAsGuest": "Continuar como invitado",
+  "logout": "Cerrar sesión",
+  "language": "Idioma",
+
+  "category": "Categoría",
+  "hands": "manos",
+  "feet": "pies",
+  "services": "servicios",
+
+  "openUrlError": "NNo se pudo abrir {url}",
+  "@openUrlError": {
+    "description": "Error genérico al abrir una URL",
+    "placeholders": {
+      "url": { "type": "String" }
+    }
+  },
+
+  "noServicesFound": "No se encontraron servicios",
+  "noSpecialistsFound": "No se encontraron especialistas",
+
+  "googleLoginSuccess": "Sesión iniciada con Google",
+  "guest": "Invitado",
+
+  "_all_services/workers/worker_detail_screenns": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "tabInfo": "Info",
+  "tabPortfolio": "Portfolio",
+  "aboutMe": "Sobre mí",
+  "workerNotFound": "Trabajador no encontrado",
+  "noPhotos": "Aún no hay fotos",
+  "noServicesAssigned": "No hay servicios asignados",
+  "errorLoadingSpecialists": "Error al cargar especialistas",
+  "errorLoadingServices": "Error al cargar servicios",
+  "priceOnRequest": "Precio a solicitud",
+  "viewProfileAndCatalog": "Ver perfil y catálogo",
+
+  "_booking_admin_dialogs": "Texts used in create/edit appointment dialogs",
+
+  "createAppointmentTitle": "Crear cita",
+  "editAppointmentTitle": "Editar cita",
+
+  "modeExisting": "Existente",
+  "modeNew": "Nuevo",
+
+  "searchClientLabel": "Buscar (nombre / teléfono / instagram)",
+  "noMatches": "Sin resultados",
+
+  "firstNameLabel": "Nombre",
+  "lastNameLabel": "Apellido",
+  "countryLabel": "País",
+  "phoneLabel": "Teléfono",
+  "instagramOptionalLabel": "Instagram (opcional)",
+
+  "firstNameRequired": "El nombre es obligatorio",
+  "lastNameRequired": "El apellido es obligatorio",
+
+  "procedureLabel": "Procedimiento",
+  "procedureRequired": "El procedimiento es obligatorio",
+
+  "typeLabel": "Tipo",
+  "typeRequired": "El tipo es obligatorio",
+  "mostCommonBadge": "Más común",
+
+  "selectTimePlaceholder": "Seleccionar hora",
+  "timeRequired": "La hora es obligatoria",
+
+  "priceLabel": "Precio: €{value}",
+  "@priceLabel": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "timeMinutesLabel": "Tiempo: {minutes}m",
+  "@timeMinutesLabel": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+
+  "timeMinutesEmpty": "Tiempo: —",
+
+  "selectExistingClient": "Selecciona un cliente existente",
+  "phoneOrInstagramRequired": "Se requiere teléfono o Instagram",
+
+  "appointmentCreated": "Cita creada",
+  "appointmentUpdated": "Cita actualizada",
+  "appointmentDeleted": "Cita eliminada",
+
+  "deleteAppointmentTitle": "¿Eliminar cita?",
+  "deleteAppointmentBody": "Esta acción no se puede deshacer.",
+
+  "delete": "Eliminar",
+  "no": "No",
+  "save": "Guardar",
+  "create": "Crear",
+
+  "errorWithValue": "Error: {value}",
+  "@errorWithValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "clientFallback": "Cliente",
+  "serviceFallback": "Servicio",
+
+  "_app_common": "Common app strings",
+
+  "appTitle": "Salón de Manicura",
+  "schedule": "Horario",
+  "price": "Precio: {price}",
+  "appointmentsCount": "{count, plural, =0{Sin citas} =1{1 cita} other{{count} citas}}",
+  "confirmBooking": "Confirmar reserva",
+  "cancel": "Cancelar",
+  "successBooking": "¡Tu cita ha sido confirmada!",
+
+  "selectProcedurePlaceholder": "Seleccionar procedimiento",
+  "selectProcedureHelper": "Por favor selecciona un procedimiento",
+  "pickProcedureTitle": "Selecciona un procedimiento",
+  "selectTypePlaceholder": "Seleccionar tipo",
+  "pickTypeTitle": "Selecciona un tipo"
+}

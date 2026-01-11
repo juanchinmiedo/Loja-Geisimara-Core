@@ -1,0 +1,786 @@
+return AlertDialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                "Create appointment",
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxDialogWidth > 420 ? 420 : maxDialogWidth,
+                ),
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // MODE TOGGLE
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    setLocalState(() {
+                                      existingClientMode = true;
+                                      // limpia new client
+                                      firstNameCtrl.clear();
+                                      lastNameCtrl.clear();
+                                      countryCtrl.clear();
+                                      phoneCtrl.clear();
+                                      instagramCtrl.clear();
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: existingClientMode
+                                          ? const Color(0xff721c80)
+                                          : Colors.transparent,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        "Existing",
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: existingClientMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    setLocalState(() {
+                                      existingClientMode = false;
+                                      selectedClientId = '';
+                                      selectedClientData = null;
+                                      clientSearchCtrl.clear();
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: !existingClientMode
+                                          ? const Color(0xff721c80)
+                                          : Colors.transparent,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        "New",
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: !existingClientMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        if (existingClientMode) ...[
+                          TextFormField(
+                            controller: clientSearchCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Search (name / phone / instagram)",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            onChanged: (_) => setLocalState(() {}),
+                          ),
+                          const SizedBox(height: 10),
+
+                          // ─────────────────────────────
+                          // PUNTO 1: CAJA FIJA 3 FILAS + SCROLL
+                          // ─────────────────────────────
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('clients')
+                                .orderBy('updatedAt', descending: true)
+                                .limit(120)
+                                .snapshots(),
+                            builder: (context, snap) {
+                              if (snap.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const SizedBox(
+                                  height: 28,
+                                  child: Center(
+                                    child: LinearProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              if (!snap.hasData || snap.data!.docs.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final q = clientSearchCtrl.text
+                                  .trim()
+                                  .toLowerCase();
+                              final docs = snap.data!.docs;
+
+                              List<QueryDocumentSnapshot> filtered;
+
+                              if (q.isEmpty) {
+                                // recientes si no escribe nada
+                                filtered = docs.take(10).toList();
+                              } else {
+                                filtered = docs.where((d) {
+                                  final data =
+                                      d.data() as Map<String, dynamic>? ?? {};
+                                  final search =
+                                      (data['search'] as List<dynamic>?)
+                                              ?.map((e) => e
+                                                  .toString()
+                                                  .toLowerCase())
+                                              .toList() ??
+                                          [];
+
+                                  final first = (data['firstName'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                                  final last = (data['lastName'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                                  final ig = (data['instagram'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+
+                                  final nameMatch = ('$first $last')
+                                          .contains(q) ||
+                                      first.contains(q) ||
+                                      last.contains(q);
+
+                                  final igMatch = ig.contains(
+                                      q.replaceAll('@', ''));
+
+                                  final searchMatch = search
+                                      .any((t) => t.contains(q));
+
+                                  return nameMatch || igMatch || searchMatch;
+                                }).toList();
+                              }
+
+                              if (filtered.isEmpty) {
+                                return Text(
+                                  "No matches",
+                                  style: TextStyle(color: Colors.grey[700]),
+                                );
+                              }
+
+                              const tileHeight = 56.0;
+                              const maxVisible = 3;
+                              const boxHeight = tileHeight * maxVisible;
+
+                              return Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.black12),
+                                ),
+                                child: SizedBox(
+                                  height: boxHeight,
+                                  child: Scrollbar(
+                                    thumbVisibility: true,
+                                    child: ListView.separated(
+                                      itemCount: filtered.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(height: 1),
+                                      itemBuilder: (_, i) {
+                                        final d = filtered[i];
+                                        final first =
+                                            (d['firstName'] ?? '').toString();
+                                        final last =
+                                            (d['lastName'] ?? '').toString();
+
+                                        final ctry = d['country'];
+                                        final ph = d['phone'];
+
+                                        final phoneText = (ctry is num &&
+                                                ph is num &&
+                                                ctry > 0 &&
+                                                ph > 0)
+                                            ? "+${ctry.toInt()} ${ph.toInt()}"
+                                            : "";
+
+                                        final ig =
+                                            (d['instagram'] ?? '').toString();
+
+                                        final subtitle = [
+                                          phoneText.isNotEmpty ? phoneText : "",
+                                          ig.isNotEmpty ? "@$ig" : "",
+                                        ]
+                                            .where((x) =>
+                                                x.trim().isNotEmpty)
+                                            .join(" • ");
+
+                                        return ListTile(
+                                          dense: true,
+                                          contentPadding: EdgeInsets.zero,
+                                          title: Text(
+                                            "$first $last",
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          subtitle: Text(
+                                            subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          trailing: const Icon(
+                                            Icons.check_circle_outline,
+                                            size: 18,
+                                          ),
+                                          onTap: () =>
+                                              loadClient(d.id, setLocalState),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                          if (selectedClientData != null) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xff721c80)
+                                    .withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xff721c80)
+                                      .withOpacity(0.2),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    clientNamePreview,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    contactPreview,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.grey[700]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+
+                        if (!existingClientMode) ...[
+                          TextFormField(
+                            controller: firstNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "First name",
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? "First name is required"
+                                : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: lastNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Last name",
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? "Last name is required"
+                                : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: countryCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Country code (e.g. 351, 34)",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.flag_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: phoneCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: "Phone (optional)",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.phone),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: instagramCtrl,
+                            decoration: const InputDecoration(
+                              labelText: "Instagram (optional)",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.alternate_email),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Phone or Instagram is required",
+                            style: TextStyle(
+                                color: Colors.grey[700], fontSize: 12),
+                          ),
+                        ],
+
+                        const SizedBox(height: 12),
+
+                        // PROCEDURE
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('services')
+                              .snapshots(),
+                          builder: (context, snap) {
+                            if (snap.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: LinearProgressIndicator(),
+                              );
+                            }
+                            if (snap.hasError ||
+                                !snap.hasData ||
+                                snap.data!.docs.isEmpty) {
+                              return const Text("No services found");
+                            }
+                            final docs = snap.data!.docs;
+
+                            return DropdownButtonFormField<String>(
+                              value: selectedServiceId,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: "Procedure",
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                              ),
+                              items: docs.map((d) {
+                                final data =
+                                    d.data() as Map<String, dynamic>? ?? {};
+                                final nameKey =
+                                    (data['name'] ?? d.id).toString();
+                                final label =
+                                    trServiceOrAddon(context, nameKey);
+
+                                return DropdownMenuItem<String>(
+                                  value: d.id,
+                                  child: Text(
+                                    label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) async {
+                                selectedServiceId = val;
+                                selectedTypeKey = null;
+                                selectedTypeData = null;
+
+                                if (val != null) {
+                                  final doc = await FirebaseFirestore.instance
+                                      .collection('services')
+                                      .doc(val)
+                                      .get();
+                                  selectedServiceData = doc.data();
+                                } else {
+                                  selectedServiceData = null;
+                                }
+                                setLocalState(() {});
+                              },
+                              validator: (v) =>
+                                  (v == null || v.isEmpty)
+                                      ? "Procedure is required"
+                                      : null,
+                            );
+                          },
+                        ),
+
+                        // PUNTO 3: TYPES dropdown si el servicio lo requiere
+                        if (types.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          DropdownButtonFormField<String>(
+                            value: selectedTypeKey,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: "Type / Size",
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                            ),
+                            items: types.map((t) {
+                              final key = (t['key'] ?? '').toString();
+                              final nameKey =
+                                  (t['nameKey'] ?? key).toString();
+                              final label =
+                                  trServiceOrAddon(context, nameKey);
+
+                              return DropdownMenuItem<String>(
+                                value: key,
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) {
+                              selectedTypeKey = v;
+                              selectedTypeData = types.firstWhere(
+                                (t) =>
+                                    (t['key'] ?? '').toString() == v,
+                                orElse: () => types.first,
+                              );
+                              setLocalState(() {});
+                            },
+                            validator: (v) =>
+                                (v == null || v.isEmpty)
+                                    ? "Type is required"
+                                    : null,
+                          ),
+                        ],
+
+                        const SizedBox(height: 12),
+
+                        // TIME (PUNTO 4: 5 en 5)
+                        InkWell(
+                          onTap: () async {
+                            final initial = selectedTime ?? TimeOfDay.now();
+                            final t = await _pickTime5(ctx, initial);
+                            if (t != null) {
+                              setLocalState(() => selectedTime = t);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.black26),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.schedule, size: 18),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    selectedTime == null
+                                        ? "Select time"
+                                        : "${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const Spacer(),
+                                const Icon(Icons.edit,
+                                    size: 16, color: Colors.black54),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        if (selectedServiceData != null)
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  "Price: €${price.toStringAsFixed(0)}",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                durationMin > 0 ? "Time: ${durationMin}m" : "Time: —",
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.pop(ctx),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff721c80),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final ok = formKey.currentState?.validate() == true;
+                          if (!ok) return;
+
+                          // Validaciones client
+                          if (existingClientMode) {
+                            if (selectedClientData == null ||
+                                selectedClientId.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Select an existing client"),
+                                ),
+                              );
+                              return;
+                            }
+                          } else {
+                            final ctry = int.tryParse(countryCtrl.text.trim()) ?? 0;
+                            final ph = int.tryParse(phoneCtrl.text.trim()) ?? 0;
+                            final ig = _normalizeInstagram(instagramCtrl.text);
+
+                            final hasPhone = (ctry > 0 && ph > 0);
+                            final hasIg = ig.isNotEmpty;
+
+                            if (!hasPhone && !hasIg) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text("Phone or Instagram is required"),
+                                ),
+                              );
+                              return;
+                            }
+                          }
+
+                          // Validación type si hace falta
+                          final types = _typesFromService(selectedServiceData);
+                          if (types.isNotEmpty &&
+                              (selectedTypeKey == null ||
+                                  selectedTypeKey!.isEmpty)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Type is required"),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (selectedTime == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Time is required")),
+                            );
+                            return;
+                          }
+
+                          if (selectedServiceId == null ||
+                              selectedServiceData == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Procedure is required")),
+                            );
+                            return;
+                          }
+
+                          setLocalState(() => saving = true);
+
+                          try {
+                            final dt = DateTime(
+                              _selectedDay.year,
+                              _selectedDay.month,
+                              _selectedDay.day,
+                              selectedTime!.hour,
+                              selectedTime!.minute,
+                            );
+
+                            // service nameKey (para ARB)
+                            final serviceNameKey =
+                                (selectedServiceData?['name'] ?? '').toString();
+                            final translatedName =
+                                trServiceOrAddon(context, serviceNameKey);
+
+                            final durationMin = _minutesFromSelection(
+                                selectedServiceData, selectedTypeData);
+                            final basePrice = _priceFromSelection(
+                                selectedServiceData, selectedTypeData);
+
+                            late String clientId;
+                            late String clientName;
+                            late int clientCountry;
+                            late int clientPhone;
+                            late String clientInstagram;
+
+                            if (existingClientMode) {
+                              final data = selectedClientData!;
+                              clientId = selectedClientId;
+
+                              final fn = (data['firstName'] ?? '').toString();
+                              final ln = (data['lastName'] ?? '').toString();
+                              clientName = "$fn $ln".trim();
+
+                              final c = data['country'];
+                              final p = data['phone'];
+                              clientCountry = (c is num) ? c.toInt() : 0;
+                              clientPhone = (p is num) ? p.toInt() : 0;
+
+                              clientInstagram =
+                                  (data['instagram'] ?? '').toString();
+                            } else {
+                              final fn = firstNameCtrl.text.trim();
+                              final ln = lastNameCtrl.text.trim();
+
+                              final ctry =
+                                  int.tryParse(countryCtrl.text.trim()) ?? 0;
+                              final ph =
+                                  int.tryParse(phoneCtrl.text.trim()) ?? 0;
+                              final ig =
+                                  _normalizeInstagram(instagramCtrl.text);
+
+                              clientId = _buildClientId(
+                                country: ctry,
+                                phone: ph,
+                                instagram: ig,
+                              );
+
+                              clientName = "$fn $ln".trim();
+                              clientCountry = ctry;
+                              clientPhone = ph;
+                              clientInstagram = ig;
+
+                              final searchTokens = _buildSearchTokens(
+                                firstName: fn,
+                                lastName: ln,
+                                country: ctry,
+                                phone: ph,
+                                instagram: ig,
+                              );
+
+                              // UPSERT cliente
+                              await FirebaseFirestore.instance
+                                  .collection('clients')
+                                  .doc(clientId)
+                                  .set(
+                                {
+                                  'firstName': fn,
+                                  'lastName': ln,
+                                  'country': ctry,
+                                  'phone': ph,
+                                  'instagram': ig,
+                                  'search': searchTokens,
+                                  'updatedAt': FieldValue.serverTimestamp(),
+                                  'createdAt': FieldValue.serverTimestamp(),
+                                },
+                                SetOptions(merge: true),
+                              );
+                            }
+
+                            await FirebaseFirestore.instance
+                                .collection('appointments')
+                                .add({
+                              'clientId': clientId,
+                              'clientName': clientName,
+                              'clientCountry': clientCountry,
+                              'clientPhone': clientPhone,
+                              'clientInstagram': clientInstagram,
+
+                              'serviceId': selectedServiceId,
+                              'serviceNameKey': serviceNameKey,
+                              'serviceName': translatedName,
+
+                              // type
+                              'serviceTypeKey': selectedTypeKey ?? '',
+
+                              'durationMin': durationMin,
+                              'basePrice': basePrice,
+                              'total': basePrice,
+
+                              'status': 'scheduled',
+                              'appointmentDate': Timestamp.fromDate(dt),
+
+                              'createdAt': FieldValue.serverTimestamp(),
+                              'updatedAt': FieldValue.serverTimestamp(),
+                            });
+
+                            if (!mounted) return;
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text("Appointment created")),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Error: $e")),
+                            );
+                          } finally {
+                            setLocalState(() => saving = false);
+                          }
+                        },
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          "Create",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ],
+            );

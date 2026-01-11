@@ -1,0 +1,180 @@
+{
+  "@@locale": "pt_BR",
+
+  "console_firebase_database": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+
+  "gelA": "Aplicação de Gel",
+  "acrylicA": "Aplicação de Acrílico",
+  "fiberA": "Aplicação de Fibra",
+  "gelM": "Manutenção de Gel",
+  "acrylicM": "Manutenção de Acrílico",
+  "fiberM": "Manutenção de Fibra",
+  "simpleVarnish": "Verniz Simples",
+  "gelVarnish": "Reforço com Verniz de Gel",
+  "cutilage": "Cutilagem",
+  "gelVarnishPedicure": "Pedicure com Verniz de Gel",
+  "simplePedicure": "Pedicure Simples",
+  "nailDecorations": "Decorações",
+
+  "bottom_navigationbar": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+  
+  "homeTab": "Inicio",
+  "mapsTab": "Mapas",
+  "clientsTab": "Clientes",
+  "bookingTab": "Agendamento",
+  "profileTab": "Perfil",
+
+  "_carrousel_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "bookNowButton": "Reservar agora",
+  "bookNowTitle": "Agendar Marcação",
+  "bookNowSubtitle": "Agende sua consulta em poucos segundos",
+
+  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "openInMaps": "Abrir no Google Maps",
+  "openInMapsError": "Não foi possível abrir o Google Maps",
+
+  "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "title": "Geisimara Nail Designer",
+  "intro": "Manicure, Pedicure e Design de Sobrancelhas e Cilios",
+  "start": "Começar",
+
+  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "viewAll": "Ver todo",
+  "offers": "Ofertas",
+  "website": "site web",
+  "Bspecialists": "Melhores Especialistas",
+  "Bservices": "Melhores Serviços",
+  "Aservices": "Todos os Serviços",
+  "Aspecialists": "Todos os Especialistas",
+
+  "continueWithGoogle": "Continuar com Google",
+  "startAdminMode": "Iniciar modo admin",
+  "adminModeEnabled": "Modo admin ativado",
+
+  "continueAsGuest": "Continuar como convidado",
+  "logout": "Fechar sessão",
+  "language": "Idioma",
+
+  "category": "Categoria",
+  "hands": "mãos",
+  "feet": "pés",
+  "services": "serviços",
+
+  "openUrlError": "Não foi possível abrir {url}",
+  "@openUrlError": {
+    "description": "Erro genérico ao abrir um URL",
+    "placeholders": {
+      "url": { "type": "String" }
+    }
+  },
+
+  "noServicesFound": "Nenhum serviço encontrado",
+  "noSpecialistsFound": "Nenhum especialista encontrado",
+
+  "googleLoginSuccess": "Sessão iniciada com Google",
+  "guest": "Convidado",
+
+  "_all_services/workers/worker_detail_screenns": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "tabInfo": "Info",
+  "tabPortfolio": "Portfolio",
+  "aboutMe": "Sobre mim",
+  "workerNotFound": "Trabalhador não encontrado",
+  "noPhotos": "Ainda não há fotos",
+  "noServicesAssigned": "Nenhum serviço atribuído",
+  "errorLoadingSpecialists": "Erro ao carregar especialistas",
+  "errorLoadingServices": "Erro ao carregar serviços",
+  "priceOnRequest": "Preço sob consulta",
+  "viewProfileAndCatalog": "Ver perfil e catálogo",
+
+  "_booking_admin_dialogs": "Texts used in create/edit appointment dialogs",
+
+  "createAppointmentTitle": "Criar marcação",
+  "editAppointmentTitle": "Editar marcação",
+
+  "modeExisting": "Existente",
+  "modeNew": "Novo",
+
+  "searchClientLabel": "Pesquisar (nome / telefone / instagram)",
+  "noMatches": "Sem resultados",
+
+  "firstNameLabel": "Nome",
+  "lastNameLabel": "Apelido",
+  "countryLabel": "País",
+  "phoneLabel": "Telefone",
+  "instagramOptionalLabel": "Instagram (opcional)",
+
+  "firstNameRequired": "O nome é obrigatório",
+  "lastNameRequired": "O apelido é obrigatório",
+
+  "procedureLabel": "Procedimento",
+  "procedureRequired": "O procedimento é obrigatório",
+
+  "typeLabel": "Tipo",
+  "typeRequired": "O tipo é obrigatório",
+  "mostCommonBadge": "Mais comum",
+
+  "selectTimePlaceholder": "Selecionar hora",
+  "timeRequired": "A hora é obrigatória",
+
+  "priceLabel": "Preço: €{value}",
+  "@priceLabel": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "timeMinutesLabel": "Tempo: {minutes}m",
+  "@timeMinutesLabel": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+
+  "timeMinutesEmpty": "Tempo: —",
+
+  "selectExistingClient": "Selecione um cliente existente",
+  "phoneOrInstagramRequired": "É necessário telefone ou Instagram",
+
+  "appointmentCreated": "Marcação criada",
+  "appointmentUpdated": "Marcação atualizada",
+  "appointmentDeleted": "Marcação eliminada",
+
+  "deleteAppointmentTitle": "Eliminar marcação?",
+  "deleteAppointmentBody": "Esta ação não pode ser desfeita.",
+
+  "delete": "Eliminar",
+  "no": "Não",
+  "save": "Guardar",
+  "create": "Criar",
+
+  "errorWithValue": "Erro: {value}",
+  "@errorWithValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "clientFallback": "Cliente",
+  "serviceFallback": "Serviço",
+
+  "_app_common": "Common app strings",
+
+  "appTitle": "Salão de Manicure",
+  "schedule": "Agenda",
+  "price": "Preço: {price}",
+  "appointmentsCount": "{count, plural, =0{Sem agendamentos} =1{1 agendamento} other{{count} agendamentos}}",
+  "confirmBooking": "Confirmar agendamento",
+  "cancel": "Cancelar",
+  "successBooking": "Seu agendamento foi confirmado!",
+
+  "selectProcedurePlaceholder": "Selecionar Procedimento",
+  "selectProcedureHelper": "Por favor selecione um procedimento",
+  "pickProcedureTitle": "Selecione um procedimento",
+  "selectTypePlaceholder": "Selecionar Tipo",
+  "pickTypeTitle": "Selecione um tipo"
+}

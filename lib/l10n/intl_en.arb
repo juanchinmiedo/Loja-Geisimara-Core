@@ -1,0 +1,180 @@
+{
+  "@@locale": "en",
+
+  "console_firebase_database": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+
+  "gelA": "Gel Aplication",
+  "acrylicA": "Acrylic Aplication",
+  "fiberA": "Fiber Aplication",
+  "gelM": "Gel Maintenance",
+  "acrylicM": "Acrylic Maintenance",
+  "fiberM": "Fiber Maintenance",
+  "simpleVarnish": "Simple Varnish",
+  "gelVarnish": "Gel Varnish Reinforcement",
+  "cutilage": "Cutilage",
+  "gelVarnishPedicure": "Gel Varnish Pedicure",
+  "simplePedicure": "Simple Pedicure",
+  "nailDecorations": "Decorations",
+
+  "bottom_navigationbar": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
+  
+  "homeTab": "Home",
+  "mapsTab": "Maps",
+  "clientsTab": "Clients",
+  "bookingTab": "Booking",
+  "profileTab": "Profile",
+
+  "_carrousel_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "bookNowButton": "Book Now",
+  "bookNowTitle": "Schedule Appointment",
+  "bookNowSubtitle": "Schedule your appointment in a few seconds",
+
+  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "openInMaps": "Open in Google Maps",
+  "openInMapsError": "Could not open Google Maps",
+
+  "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "title": "Geisimara Nail Designer",
+  "intro": "Manicure, Pedicure and Eyebrows and Eyelashes Design",
+  "start": "Get Started",
+
+  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "viewAll": "View all",
+  "offers": "Offers",
+  "website": "website",
+  "Bspecialists": "Best Specialists",
+  "Bservices": "Best Services",
+  "Aservices": "All Services",
+  "Aspecialists": "All Specialists",
+
+  "continueWithGoogle": "Continue with Google",
+  "startAdminMode": "Start admin mode",
+  "adminModeEnabled": "Admin mode enabled",
+
+  "continueAsGuest": "Continue as guest",
+  "logout": "Sign out",
+  "language": "Language",
+
+  "category": "Category",
+  "hands": "hands",
+  "feet": "feet",
+  "services": "services",
+
+  "openUrlError": "Could not open {url}",
+  "@openUrlError": {
+    "description": "Generic error when opening a URL",
+    "placeholders": {
+      "url": { "type": "String" }
+    }
+  },
+
+  "noServicesFound": "No services found",
+  "noSpecialistsFound": "No specialists found",
+
+  "googleLoginSuccess": "Google login successful",
+  "guest": "Guest",
+
+  "_all_services/workers/worker_detail_screenns": "Esto es un comentario sobre el lugar donde estan estos textos",
+
+  "tabInfo": "Info",
+  "tabPortfolio": "Portfolio",
+  "aboutMe": "About me",
+  "workerNotFound": "Worker not found",
+  "noPhotos": "No photos yet",
+  "noServicesAssigned": "No services assigned",
+  "errorLoadingSpecialists": "Error loading specialists",
+  "errorLoadingServices": "Error loading services",
+  "priceOnRequest": "Price on request",
+  "viewProfileAndCatalog": "View profile & catalog",
+
+  "_booking_admin_dialogs": "Texts used in create/edit appointment dialogs",
+
+  "createAppointmentTitle": "Create appointment",
+  "editAppointmentTitle": "Edit appointment",
+
+  "modeExisting": "Existing",
+  "modeNew": "New",
+
+  "searchClientLabel": "Search (name / phone / instagram)",
+  "noMatches": "No matches",
+
+  "firstNameLabel": "First name",
+  "lastNameLabel": "Last name",
+  "countryLabel": "Country",
+  "phoneLabel": "Phone",
+  "instagramOptionalLabel": "Instagram (optional)",
+
+  "firstNameRequired": "First name is required",
+  "lastNameRequired": "Last name is required",
+
+  "procedureLabel": "Procedure",
+  "procedureRequired": "Procedure is required",
+
+  "typeLabel": "Type",
+  "typeRequired": "Type is required",
+  "mostCommonBadge": "Most common",
+
+  "selectTimePlaceholder": "Select time",
+  "timeRequired": "Time is required",
+
+  "priceLabel": "Price: €{value}",
+  "@priceLabel": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "timeMinutesLabel": "Time: {minutes}m",
+  "@timeMinutesLabel": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+
+  "timeMinutesEmpty": "Time: —",
+
+  "selectExistingClient": "Select an existing client",
+  "phoneOrInstagramRequired": "Phone or Instagram is required",
+
+  "appointmentCreated": "Appointment created",
+  "appointmentUpdated": "Appointment updated",
+  "appointmentDeleted": "Appointment deleted",
+
+  "deleteAppointmentTitle": "Delete appointment?",
+  "deleteAppointmentBody": "This action cannot be undone.",
+
+  "delete": "Delete",
+  "no": "No",
+  "save": "Save",
+  "create": "Create",
+
+  "errorWithValue": "Error: {value}",
+  "@errorWithValue": {
+    "placeholders": {
+      "value": { "type": "String" }
+    }
+  },
+
+  "clientFallback": "Client",
+  "serviceFallback": "Service",
+
+  "_app_common": "Common app strings",
+
+  "appTitle": "Nails Studio",
+  "schedule": "Schedule",
+  "price": "Price: {price}",
+  "appointmentsCount": "{count, plural, =0{No appointments} =1{1 appointment} other{{count} appointments}}",
+  "confirmBooking": "Confirm booking",
+  "cancel": "Cancel",
+  "successBooking": "Your appointment is confirmed!",
+
+  "selectProcedurePlaceholder": "Select Procedure",
+  "selectProcedureHelper": "Please select a procedure",
+  "pickProcedureTitle": "Pick a Procedure",
+  "selectTypePlaceholder": "Select Type",
+  "pickTypeTitle": "Pick a Type"
+}
