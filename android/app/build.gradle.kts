@@ -35,9 +35,7 @@ android {
         versionName = flutter.versionName
 
         // ⬇️ tu clave (revisa seguridad si es producción)
-        manifestPlaceholders += mapOf(
-            "MAPS_API_KEY" to "AIzaSyDy3TU_y_l_d0Q51gH69tknNIz3nsjAH10"
-        )
+        manifestPlaceholders["MAPS_API_KEY"] = (project.findProperty("GOOGLE_MAPS_API_KEY") as String?) ?: ""
     }
 
     buildTypes {

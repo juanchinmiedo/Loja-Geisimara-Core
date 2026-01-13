@@ -1,0 +1,149 @@
+========================================
+SETUP_NEW_CLIENT.txt
+CONFIGURACIÓN PARA NUEVO CLIENTE
+(ANDROID / iOS / WEB / WINDOWS / macOS / LINUX)
+========================================
+
+Este repositorio NO incluye secretos ni claves.
+Cada cliente debe usar SUS propias cuentas:
+
+- Firebase (Google)
+- Google Cloud (Maps / Places si se usa)
+
+----------------------------------------
+1) PREPARAR EL PROYECTO
+----------------------------------------
+1) Clona el repositorio o copia el código.
+2) Ejecuta el script de setup según tu sistema:
+
+WINDOWS:
+- Doble click en SetUp_Clients/setup_client.bat
+o en terminal:
+  SetUp_Clients\setup_client.bat
+
+macOS / LINUX:
+- En terminal:
+  chmod +x SetUp_Clients/setup_client.sh
+  ./SetUp_Clients/setup_client.sh
+
+3) Ejecuta:
+   flutter clean
+   flutter pub get
+
+----------------------------------------
+2) FIREBASE: CREAR PROYECTO DEL CLIENTE
+----------------------------------------
+1) Ir a: https://console.firebase.google.com
+2) Crear un proyecto nuevo.
+3) Activar servicios (según uso):
+   - Authentication
+   - Firestore Database
+   - Storage
+   - Functions (si aplica)
+
+----------------------------------------
+3) FIREBASE: REGISTRAR APPS (SEGÚN PLATAFORMA)
+----------------------------------------
+
+ANDROID
+1) Firebase -> Project settings -> Add app -> Android
+2) Package name: el applicationId del proyecto
+3) Descargar google-services.json
+4) Colocar en:
+   android/app/google-services.json
+
+iOS (solo Mac)
+1) Add app -> iOS
+2) Bundle ID: el del proyecto (Runner / Xcode settings)
+3) Descargar GoogleService-Info.plist
+4) Colocar en:
+   ios/Runner/GoogleService-Info.plist
+
+macOS (solo Mac)
+1) Add app -> macOS
+2) Descargar GoogleService-Info.plist
+3) Colocar en:
+   macos/Runner/GoogleService-Info.plist
+
+WEB (si se ejecuta en web)
+1) Add app -> Web
+2) Copiar datos de configuración WEB (apiKey, appId, authDomain, etc.)
+3) Se colocan en lib/firebase_options.dart (paso 4)
+
+WINDOWS / LINUX
+- Si el proyecto usa Firebase en Windows/Linux, también se rellena en
+  lib/firebase_options.dart (sección windows).
+- Si NO se usa Firebase en desktop, se puede dejar vacío.
+
+----------------------------------------
+4) FIREBASE OPTIONS (OBLIGATORIO)
+----------------------------------------
+El repositorio incluye una plantilla sin claves:
+  lib/firebase_options.example.dart
+
+1) Copiar:
+   lib/firebase_options.example.dart
+2) Renombrar a:
+   lib/firebase_options.dart
+3) Rellenar los campos con los valores del cliente (Firebase Console):
+   Project settings -> General -> Your apps
+
+IMPORTANTE:
+- lib/firebase_options.dart NO se sube a GitHub.
+- Es local para cada cliente.
+
+----------------------------------------
+5) GOOGLE MAPS (SI SE USA)
+----------------------------------------
+ANDROID
+1) Ir a: https://console.cloud.google.com
+2) Seleccionar/crear proyecto del cliente
+3) Activar APIs:
+   - Maps SDK for Android
+   - (Opcional) Places API si hay búsquedas
+4) Crear API Key y RESTRINGIR:
+   - Application restriction: Android apps
+   - Añadir: package name + SHA-1
+   - API restriction: solo Maps SDK for Android (+ Places si aplica)
+
+5) Poner la key en:
+   android/local.properties
+   GOOGLE_MAPS_API_KEY=TU_API_KEY
+
+NOTA:
+android/local.properties NO se sube a GitHub.
+
+----------------------------------------
+6) EJECUTAR POR PLATAFORMA
+----------------------------------------
+ANDROID:
+  flutter run
+
+iOS:
+  flutter run
+
+WEB:
+  flutter run -d chrome
+
+WINDOWS:
+  flutter run -d windows
+
+macOS:
+  flutter run -d macos
+
+LINUX:
+  flutter run -d linux
+
+----------------------------------------
+7) SEGURIDAD (OBLIGATORIO)
+----------------------------------------
+NO subir nunca a GitHub:
+- android/local.properties
+- android/app/google-services.json
+- ios/Runner/GoogleService-Info.plist
+- macos/Runner/GoogleService-Info.plist
+- lib/firebase_options.dart
+
+========================================
+FIN
+========================================

@@ -1,0 +1,42 @@
+========================================
+TROUBLESHOOTING.txt
+========================================
+
+1) ERROR: Missing google-services.json (Android)
+- Falta android/app/google-services.json
+- Solución:
+  Descárgalo desde Firebase (Android app) y colócalo ahí.
+
+2) ERROR: FirebaseOptions / DefaultFirebaseOptions not found
+- Falta lib/firebase_options.dart
+- Solución:
+  Copia lib/firebase_options.example.dart -> lib/firebase_options.dart
+  Rellena los datos del cliente.
+
+3) ERROR: API key not authorized / Maps not loading (Android)
+- Restricciones incorrectas en Google Cloud
+- Solución:
+  Verificar:
+  - Package name correcto
+  - SHA-1 correcto
+  - API habilitada: Maps SDK for Android
+  - API restriction aplicada a la key
+
+4) iOS build falla por Firebase (Mac)
+- El .plist no está dentro del target Runner
+- Solución:
+  Abrir ios/ en Xcode y comprobar que GoogleService-Info.plist está en Runner.
+
+5) WEB: authDomain / measurementId error
+- Config web incompleta en lib/firebase_options.dart
+- Solución:
+  Rellenar authDomain y measurementId desde Firebase Console.
+
+6) "AdvancedMarkers... Capabilities unavailable without a Map ID"
+- No es error: solo indica funciones avanzadas requieren Map ID.
+- Solución opcional:
+  Crear Map ID en Google Cloud (Maps) y asignarlo si el proyecto lo usa.
+
+========================================
+FIN
+========================================

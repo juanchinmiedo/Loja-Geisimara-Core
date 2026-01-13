@@ -1,0 +1,60 @@
+========================================
+CHECKLIST_CLIENTE.txt
+========================================
+
+OBJETIVO:
+Configurar el proyecto con las CUENTAS y CLAVES del cliente.
+Este repositorio NO incluye secretos.
+
+ANTES DE EMPEZAR
+[ ] Tengo Flutter instalado (flutter --version)
+[ ] Tengo Android Studio (Android) / Xcode (iOS/macOS)
+[ ] Tengo acceso a una cuenta Google para Firebase/Google Cloud
+
+FIREBASE (OBLIGATORIO)
+[ ] He creado un proyecto en Firebase Console
+[ ] He activado Firestore / Auth / Storage (según el uso de la app)
+
+ARCHIVOS FIREBASE (NO SE SUBEN A GITHUB)
+ANDROID
+[ ] He creado la app Android en Firebase (package name correcto)
+[ ] He descargado google-services.json
+[ ] Lo he colocado en android/app/google-services.json
+
+iOS (si aplica)
+[ ] He creado la app iOS en Firebase (bundle id correcto)
+[ ] He descargado GoogleService-Info.plist
+[ ] Lo he colocado en ios/Runner/GoogleService-Info.plist
+
+macOS (si aplica)
+[ ] He creado la app macOS en Firebase (bundle id correcto)
+[ ] He descargado GoogleService-Info.plist
+[ ] Lo he colocado en macos/Runner/GoogleService-Info.plist
+
+FIREBASE OPTIONS (OBLIGATORIO)
+[ ] He copiado lib/firebase_options.example.dart a lib/firebase_options.dart
+[ ] He rellenado TODOS los campos con los datos de Firebase
+
+GOOGLE MAPS (SI SE USA MAPA)
+ANDROID
+[ ] He creado un proyecto en Google Cloud (o uso el del cliente)
+[ ] He activado Maps SDK for Android (y Places si aplica)
+[ ] He creado una API key RESTRINGIDA (Android: package + SHA-1)
+[ ] He puesto GOOGLE_MAPS_API_KEY en android/local.properties
+
+EJECUCIÓN
+[ ] flutter clean
+[ ] flutter pub get
+[ ] flutter run
+
+SEGURIDAD
+[ ] Confirmé que NO subí a GitHub:
+    - android/local.properties
+    - android/app/google-services.json
+    - ios/Runner/GoogleService-Info.plist
+    - macos/Runner/GoogleService-Info.plist
+    - lib/firebase_options.dart
+
+========================================
+FIN
+========================================
