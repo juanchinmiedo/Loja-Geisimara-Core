@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/widgets/async_optimistic_switch.dart';
+import 'package:salon_app/repositories/client_repo.dart';
 
 class ClientsAdminScreen extends StatefulWidget {
   const ClientsAdminScreen({super.key});
@@ -79,7 +81,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                 shape: BoxShape.circle,
               ),
             ),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,9 +101,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                 ],
               ),
             ),
-
             const SizedBox(width: 10),
-
             if (isLooking) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -111,15 +110,10 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: const Color(0xff721c80).withOpacity(0.25)),
                 ),
-                child: const Icon(
-                  Icons.notifications_active_outlined,
-                  size: 16,
-                  color: Color(0xff721c80),
-                ),
+                child: const Icon(Icons.notifications_active_outlined, size: 16, color: Color(0xff721c80)),
               ),
               const SizedBox(width: 8),
             ],
-
             IconButton(
               onPressed: onOpen,
               icon: const Icon(Icons.chevron_right, size: 28),
@@ -132,55 +126,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   }
 
   Future<void> _openClientBottomSheet(BuildContext context, String clientId) async {
-    final s = S.of(context);
-
-    final snap = await FirebaseFirestore.instance.collection('clients').doc(clientId).get();
-    final data = snap.data() ?? {};
-
-    final nameCtrl = TextEditingController(text: _fullName(data, s.clientFallback));
-    final fnCtrl = TextEditingController(text: (data['firstName'] ?? '').toString());
-    final lnCtrl = TextEditingController(text: (data['lastName'] ?? '').toString());
-    final countryCtrl = TextEditingController(text: (data['country'] ?? '').toString());
-    final phoneCtrl = TextEditingController(text: (data['phone'] ?? '').toString());
-    final igCtrl = TextEditingController(text: (data['instagram'] ?? '').toString());
-
-    final looking = _isLooking(data);
-    final br = (data['bookingRequest'] is Map<String, dynamic>) ? (data['bookingRequest'] as Map<String, dynamic>) : {};
-    final notesCtrl = TextEditingController(text: (br['notes'] ?? '').toString());
-
-    Future<void> setLooking(bool active) async {
-      await FirebaseFirestore.instance.collection('clients').doc(clientId).set({
-        'bookingRequest': {
-          'active': active,
-          'notes': notesCtrl.text.trim(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
-
-    Future<void> saveEdits() async {
-      final ctry = int.tryParse(countryCtrl.text.trim()) ?? 0;
-      final ph = int.tryParse(phoneCtrl.text.trim()) ?? 0;
-
-      await FirebaseFirestore.instance.collection('clients').doc(clientId).set({
-        'firstName': fnCtrl.text.trim(),
-        'lastName': lnCtrl.text.trim(),
-        'country': ctry,
-        'phone': ph,
-        'instagram': igCtrl.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        // No tocamos search/createdAt aquí (si ya existen, se quedan).
-      }, SetOptions(merge: true));
-    }
-
-    Future<void> deleteClient() async {
-      await FirebaseFirestore.instance.collection('clients').doc(clientId).delete();
-    }
-
     if (!context.mounted) return;
-
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -188,329 +134,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) {
-        final bottomInset = MediaQuery.of(_).viewInsets.bottom;
-
-        return Padding(
-          padding: EdgeInsets.only(left: 16, right: 16, top: 6, bottom: 16 + bottomInset),
-          child: StatefulBuilder(
-            builder: (ctx, setStateSheet) {
-              bool isLookingLocal = looking;
-
-              return SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _fullName(data, s.clientFallback),
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isLookingLocal)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xff721c80).withOpacity(0.10),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xff721c80).withOpacity(0.25)),
-                            ),
-                            child: const Icon(
-                              Icons.notifications_active_outlined,
-                              size: 16,
-                              color: Color(0xff721c80),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Preview card (igual estilo al “selected client”)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xff721c80).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xff721c80).withOpacity(0.2)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _fullName(data, s.clientFallback),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _contactLine(data),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // Looking section
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Booking request",
-                            style: TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 8),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  isLookingLocal ? "Looking for appointment" : "Not looking",
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              Switch(
-                                value: isLookingLocal,
-                                activeColor: const Color(0xff721c80),
-                                onChanged: (v) async {
-                                  setStateSheet(() => isLookingLocal = v);
-                                  await setLooking(v);
-                                },
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: notesCtrl,
-                            minLines: 1,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: "Notes / preferences",
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (_) {
-                              // guardamos cuando tocas botones (no auto-save)
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                // aseguro merge de notes también
-                                await FirebaseFirestore.instance.collection('clients').doc(clientId).set({
-                                  'bookingRequest': {
-                                    'active': isLookingLocal,
-                                    'notes': notesCtrl.text.trim(),
-                                    'updatedAt': FieldValue.serverTimestamp(),
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  },
-                                  'updatedAt': FieldValue.serverTimestamp(),
-                                }, SetOptions(merge: true));
-
-                                if (!ctx.mounted) return;
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  const SnackBar(content: Text("Booking request saved")),
-                                );
-                              },
-                              icon: const Icon(Icons.save_outlined),
-                              label: const Text("Save booking request"),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // Edit section
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Client data", style: TextStyle(fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: fnCtrl,
-                            decoration: const InputDecoration(labelText: "First name", border: OutlineInputBorder()),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: lnCtrl,
-                            decoration: const InputDecoration(labelText: "Last name", border: OutlineInputBorder()),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: TextField(
-                                  controller: countryCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: "Country",
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 4,
-                                child: TextField(
-                                  controller: phoneCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: "Phone",
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: igCtrl,
-                            decoration: const InputDecoration(labelText: "Instagram", border: OutlineInputBorder()),
-                          ),
-                          const SizedBox(height: 10),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () async {
-                                    final ok = await showDialog<bool>(
-                                      context: ctx,
-                                      builder: (dctx) => AlertDialog(
-                                        title: const Text("Confirm edit"),
-                                        content: const Text("Save changes to this client?"),
-                                        actions: [
-                                          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff721c80)),
-                                            onPressed: () => Navigator.pop(dctx, true),
-                                            child: const Text("Yes", style: TextStyle(color: Colors.white)),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-
-                                    if (ok != true) return;
-                                    await saveEdits();
-
-                                    if (!ctx.mounted) return;
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                      const SnackBar(content: Text("Client updated")),
-                                    );
-                                    Navigator.pop(ctx);
-                                  },
-                                  child: const Text("Edit / Save"),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final ok = await showDialog<bool>(
-                                      context: ctx,
-                                      builder: (dctx) => AlertDialog(
-                                        title: const Text("Delete client?"),
-                                        content: const Text("This will delete the client document. Continue?"),
-                                        actions: [
-                                          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                            onPressed: () => Navigator.pop(dctx, true),
-                                            child: const Text("Delete", style: TextStyle(color: Colors.white)),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (ok != true) return;
-
-                                    await deleteClient();
-                                    if (!ctx.mounted) return;
-
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                      const SnackBar(content: Text("Client deleted")),
-                                    );
-                                    Navigator.pop(ctx);
-                                  },
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  label: const Text("Delete"),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // CTA to booking
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xff721c80),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () {
-                          // Cambia tab a Booking y le pasa intención
-                          context.read<AdminNavProvider>().goToBookingWithClient(clientId);
-                          Navigator.pop(ctx);
-                        },
-                        icon: const Icon(Icons.edit_calendar_outlined, color: Colors.white),
-                        label: const Text(
-                          "Create appointment for this client",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+      builder: (_) => _ClientBottomSheet(clientId: clientId),
     );
-
-    nameCtrl.dispose();
-    fnCtrl.dispose();
-    lnCtrl.dispose();
-    countryCtrl.dispose();
-    phoneCtrl.dispose();
-    igCtrl.dispose();
-    notesCtrl.dispose();
   }
 
   @override
@@ -518,7 +143,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     final s = S.of(context);
     final nav = context.watch<AdminNavProvider>();
 
-    // auto-open si viene desde HomeAdmin
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final openId = nav.openClientId;
       if (openId != null) {
@@ -537,7 +161,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
             Container(
               height: 220,
               width: double.infinity,
@@ -582,7 +205,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -627,6 +249,386 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                     }).toList(),
                   );
                 },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientBottomSheet extends StatefulWidget {
+  const _ClientBottomSheet({required this.clientId});
+
+  final String clientId;
+
+  @override
+  State<_ClientBottomSheet> createState() => _ClientBottomSheetState();
+}
+
+class _ClientBottomSheetState extends State<_ClientBottomSheet> {
+  late final ClientRepo repo;
+  bool _loading = true;
+
+  final fnCtrl = TextEditingController();
+  final lnCtrl = TextEditingController();
+  final countryCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final igCtrl = TextEditingController();
+  final notesCtrl = TextEditingController();
+
+  bool isLooking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    repo = ClientRepo(FirebaseFirestore.instance);
+    _load();
+  }
+
+  bool _isLooking(Map<String, dynamic> data) {
+    final br = data['bookingRequest'];
+    if (br is Map<String, dynamic>) return br['active'] == true;
+    return false;
+  }
+
+  String _fullName(Map<String, dynamic> data, String fallback) {
+    final fn = (data['firstName'] ?? '').toString().trim();
+    final ln = (data['lastName'] ?? '').toString().trim();
+    final name = ('$fn $ln').trim();
+    return name.isEmpty ? fallback : name;
+  }
+
+  String _contactLine(Map<String, dynamic> data) {
+    final ctry = (data['country'] is num) ? (data['country'] as num).toInt() : 0;
+    final ph = (data['phone'] is num) ? (data['phone'] as num).toInt() : 0;
+    final ig = (data['instagram'] ?? '').toString().trim();
+
+    final parts = <String>[];
+    if (ctry > 0 && ph > 0) parts.add('+$ctry $ph');
+    if (ig.isNotEmpty) parts.add('@$ig');
+    return parts.join(' • ');
+  }
+
+  Future<void> _load() async {
+    final data = await repo.getClient(widget.clientId);
+
+    fnCtrl.text = (data['firstName'] ?? '').toString();
+    lnCtrl.text = (data['lastName'] ?? '').toString();
+    countryCtrl.text = (data['country'] ?? '').toString();
+    phoneCtrl.text = (data['phone'] ?? '').toString();
+    igCtrl.text = (data['instagram'] ?? '').toString();
+
+    final br = (data['bookingRequest'] is Map<String, dynamic>) ? (data['bookingRequest'] as Map<String, dynamic>) : {};
+    notesCtrl.text = (br['notes'] ?? '').toString();
+
+    isLooking = _isLooking(data);
+
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  void dispose() {
+    fnCtrl.dispose();
+    lnCtrl.dispose();
+    countryCtrl.dispose();
+    phoneCtrl.dispose();
+    igCtrl.dispose();
+    notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    if (_loading) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottomInset + 24, top: 24),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final preview = <String, dynamic>{
+      'firstName': fnCtrl.text,
+      'lastName': lnCtrl.text,
+      'country': int.tryParse(countryCtrl.text) ?? 0,
+      'phone': int.tryParse(phoneCtrl.text) ?? 0,
+      'instagram': igCtrl.text,
+      'bookingRequest': {'active': isLooking},
+    };
+
+    return Padding(
+      padding: EdgeInsets.only(left: 16, right: 16, top: 6, bottom: 16 + bottomInset),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _fullName(preview, s.clientFallback),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isLooking)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xff721c80).withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xff721c80).withOpacity(0.25)),
+                    ),
+                    child: const Icon(Icons.notifications_active_outlined, size: 16, color: Color(0xff721c80)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xff721c80).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xff721c80).withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _fullName(preview, s.clientFallback),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _contactLine(preview),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Booking request", style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isLooking ? "Looking for appointment" : "Not looking",
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      AsyncOptimisticSwitch(
+                        value: isLooking,
+                        switchActiveColor: const Color(0xff721c80),
+                        onSave: (v) async {
+                          setState(() => isLooking = v);
+                          await repo.setBookingRequest(
+                            clientId: widget.clientId,
+                            active: v,
+                            notes: notesCtrl.text,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: notesCtrl,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: "Notes / preferences",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await repo.setBookingRequest(
+                          clientId: widget.clientId,
+                          active: isLooking,
+                          notes: notesCtrl.text,
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Booking request saved")),
+                        );
+                      },
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text("Save booking request"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Client data", style: TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 10),
+                  TextField(controller: fnCtrl, decoration: const InputDecoration(labelText: "First name", border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  TextField(controller: lnCtrl, decoration: const InputDecoration(labelText: "Last name", border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: countryCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "Country", border: OutlineInputBorder()),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 4,
+                        child: TextField(
+                          controller: phoneCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "Phone", border: OutlineInputBorder()),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(controller: igCtrl, decoration: const InputDecoration(labelText: "Instagram", border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (dctx) => AlertDialog(
+                                title: const Text("Confirm edit"),
+                                content: const Text("Save changes to this client?"),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff721c80)),
+                                    onPressed: () => Navigator.pop(dctx, true),
+                                    child: const Text("Yes", style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+
+                            final ctry = int.tryParse(countryCtrl.text.trim()) ?? 0;
+                            final ph = int.tryParse(phoneCtrl.text.trim()) ?? 0;
+
+                            await repo.updateClientData(
+                              clientId: widget.clientId,
+                              firstName: fnCtrl.text,
+                              lastName: lnCtrl.text,
+                              country: ctry,
+                              phone: ph,
+                              instagram: igCtrl.text,
+                            );
+
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client updated")));
+                            Navigator.pop(context);
+                          },
+                          child: const Text("Edit / Save"),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (dctx) => AlertDialog(
+                                title: const Text("Delete client?"),
+                                content: const Text("This will delete the client document. Continue?"),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                    onPressed: () => Navigator.pop(dctx, true),
+                                    child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+
+                            await repo.deleteClient(widget.clientId);
+
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client deleted")));
+                            Navigator.pop(context);
+                          },
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          label: const Text("Delete"),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff721c80),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () {
+                  context.read<AdminNavProvider>().goToBookingWithClient(widget.clientId);
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.edit_calendar_outlined, color: Colors.white),
+                label: const Text(
+                  "Create appointment for this client",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                ),
               ),
             ),
           ],

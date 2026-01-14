@@ -8,12 +8,26 @@ TROUBLESHOOTING.txt
   Descárgalo desde Firebase (Android app) y colócalo ahí.
 
 2) ERROR: FirebaseOptions / DefaultFirebaseOptions not found
-- Falta lib/firebase_options.dart
+- Falta lib/firebase_options_local.dart o está vacío
 - Solución:
-  Copia lib/firebase_options.example.dart -> lib/firebase_options.dart
-  Rellena los datos del cliente.
+  Copiar lib/firebase_options_local.example.dart -> lib/firebase_options_local.dart
+  Rellenar con valores desde Firebase Console.
 
-3) ERROR: API key not authorized / Maps not loading (Android)
+3) ERROR: PERMISSION_DENIED / Security rules block requests
+- El cliente NO desplegó reglas o no coinciden con el proyecto.
+- Solución:
+  npm i -g firebase-tools
+  firebase login
+  firebase use --add
+  firebase deploy --only firestore:rules
+
+4) ERROR: Firestore index required (FAILED_PRECONDITION)
+- Falta el índice necesario.
+- Solución:
+  firebase deploy --only firestore:indexes
+  Esperar a que Firestore cree el índice (puede tardar minutos).
+
+5) ERROR: API key not authorized / Maps not loading (Android)
 - Restricciones incorrectas en Google Cloud
 - Solución:
   Verificar:
@@ -22,20 +36,10 @@ TROUBLESHOOTING.txt
   - API habilitada: Maps SDK for Android
   - API restriction aplicada a la key
 
-4) iOS build falla por Firebase (Mac)
-- El .plist no está dentro del target Runner
-- Solución:
-  Abrir ios/ en Xcode y comprobar que GoogleService-Info.plist está en Runner.
-
-5) WEB: authDomain / measurementId error
-- Config web incompleta en lib/firebase_options.dart
-- Solución:
-  Rellenar authDomain y measurementId desde Firebase Console.
-
 6) "AdvancedMarkers... Capabilities unavailable without a Map ID"
-- No es error: solo indica funciones avanzadas requieren Map ID.
+- No es error: funciones avanzadas requieren Map ID.
 - Solución opcional:
-  Crear Map ID en Google Cloud (Maps) y asignarlo si el proyecto lo usa.
+  Crear Map ID en Google Cloud (Maps) y usarlo si el proyecto lo soporta.
 
 ========================================
 FIN

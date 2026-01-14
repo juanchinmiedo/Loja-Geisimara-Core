@@ -12,21 +12,21 @@ if not exist "lib" (
   exit /b 1
 )
 
-REM 1) Create lib/firebase_options.dart from example if missing
-if not exist "lib\firebase_options.example.dart" (
-  echo ERROR: lib\firebase_options.example.dart not found.
+REM 1) Create lib/firebase_options_local.dart from example if missing
+if not exist "lib\firebase_options_local.example.dart" (
+  echo ERROR: lib\firebase_options_local.example.dart not found.
   echo Create the template file first.
   exit /b 1
 )
 
-if not exist "lib\firebase_options.dart" (
-  copy "lib\firebase_options.example.dart" "lib\firebase_options.dart" >nul
-  echo Created: lib\firebase_options.dart  (FILL IT with Firebase data)
+if not exist "lib\firebase_options_local.dart" (
+  copy "lib\firebase_options_local.example.dart" "lib\firebase_options_local.dart" >nul
+  echo Created: lib\firebase_options_local.dart  (FILL IT with Firebase data)
 ) else (
-  echo Exists:  lib\firebase_options.dart
+  echo Exists:  lib\firebase_options_local.dart
 )
 
-REM 2) Create android/local.properties if missing (keep sdk.dir empty for client to fill)
+REM 2) Create android/local.properties if missing
 if not exist "android" (
   echo WARNING: 'android' folder not found. Skipping Android local.properties.
 ) else (
@@ -40,13 +40,22 @@ if not exist "android" (
   )
 )
 
+REM 3) Ensure firebase folder exists (rules/indexes)
+if exist "firebase" (
+  echo Found: firebase/ (rules/indexes live here)
+) else (
+  echo NOTE: firebase/ folder not found. If rules/indexes are required, add them.
+)
+
 echo.
 echo NEXT STEPS:
 echo - Put google-services.json in: android\app\google-services.json
 echo - Put iOS plist in: ios\Runner\GoogleService-Info.plist (Mac only)
 echo - Put macOS plist in: macos\Runner\GoogleService-Info.plist (Mac only)
-echo - Fill: lib\firebase_options.dart (Firebase Console values)
+echo - Fill: lib\firebase_options_local.dart (Firebase Console values)
 echo - Fill: android\local.properties (GOOGLE_MAPS_API_KEY)
+echo - Deploy rules:   firebase deploy --only firestore:rules
+echo - Deploy indexes: firebase deploy --only firestore:indexes
 echo.
 echo Done.
 endlocal

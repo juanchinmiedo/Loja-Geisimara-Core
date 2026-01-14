@@ -17,16 +17,13 @@ Cada cliente debe usar SUS propias cuentas:
 2) Ejecuta el script de setup según tu sistema:
 
 WINDOWS:
-- Doble click en SetUp_Clients/setup_client.bat
-o en terminal:
   SetUp_Clients\setup_client.bat
 
 macOS / LINUX:
-- En terminal:
   chmod +x SetUp_Clients/setup_client.sh
   ./SetUp_Clients/setup_client.sh
 
-3) Ejecuta:
+3) Instala dependencias:
    flutter clean
    flutter pub get
 
@@ -35,11 +32,8 @@ macOS / LINUX:
 ----------------------------------------
 1) Ir a: https://console.firebase.google.com
 2) Crear un proyecto nuevo.
-3) Activar servicios (según uso):
-   - Authentication
-   - Firestore Database
-   - Storage
-   - Functions (si aplica)
+3) Activar Firestore Database (y otros servicios si aplica).
+4) (Opcional) Activar Authentication y Storage según use la app.
 
 ----------------------------------------
 3) FIREBASE: REGISTRAR APPS (SEGÚN PLATAFORMA)
@@ -54,7 +48,7 @@ ANDROID
 
 iOS (solo Mac)
 1) Add app -> iOS
-2) Bundle ID: el del proyecto (Runner / Xcode settings)
+2) Bundle ID: el del proyecto
 3) Descargar GoogleService-Info.plist
 4) Colocar en:
    ios/Runner/GoogleService-Info.plist
@@ -68,45 +62,71 @@ macOS (solo Mac)
 WEB (si se ejecuta en web)
 1) Add app -> Web
 2) Copiar datos de configuración WEB (apiKey, appId, authDomain, etc.)
-3) Se colocan en lib/firebase_options.dart (paso 4)
+3) Se colocan en lib/firebase_options_local.dart (paso 4)
 
 WINDOWS / LINUX
 - Si el proyecto usa Firebase en Windows/Linux, también se rellena en
-  lib/firebase_options.dart (sección windows).
+  lib/firebase_options_local.dart (sección windows).
 - Si NO se usa Firebase en desktop, se puede dejar vacío.
 
 ----------------------------------------
-4) FIREBASE OPTIONS (OBLIGATORIO)
+4) FIREBASE OPTIONS LOCAL (OBLIGATORIO)
 ----------------------------------------
 El repositorio incluye una plantilla sin claves:
-  lib/firebase_options.example.dart
+  lib/firebase_options_local.example.dart
 
 1) Copiar:
-   lib/firebase_options.example.dart
+   lib/firebase_options_local.example.dart
 2) Renombrar a:
-   lib/firebase_options.dart
+   lib/firebase_options_local.dart
 3) Rellenar los campos con los valores del cliente (Firebase Console):
    Project settings -> General -> Your apps
 
 IMPORTANTE:
-- lib/firebase_options.dart NO se sube a GitHub.
+- lib/firebase_options_local.dart NO se sube a GitHub.
 - Es local para cada cliente.
 
 ----------------------------------------
-5) GOOGLE MAPS (SI SE USA)
+5) FIRESTORE RULES + INDEXES (DESPLIEGUE OBLIGATORIO)
+----------------------------------------
+Este repositorio incluye reglas e índices en:
+  firebase/firestore.rules
+  firebase/firestore.indexes.json
+
+PASOS:
+1) Instalar Firebase CLI (una vez):
+   npm i -g firebase-tools
+
+2) Iniciar sesión:
+   firebase login
+
+3) En la raíz del proyecto, vincular con el proyecto del cliente:
+   firebase use --add
+
+4) Desplegar SOLO reglas:
+   firebase deploy --only firestore:rules
+
+5) Desplegar SOLO índices:
+   firebase deploy --only firestore:indexes
+
+NOTA:
+- Si el cliente no despliega reglas/índices, la app puede fallar o no cumplir seguridad.
+- Firestore puede tardar en crear índices (minutos).
+
+----------------------------------------
+6) GOOGLE MAPS (SI SE USA)
 ----------------------------------------
 ANDROID
 1) Ir a: https://console.cloud.google.com
-2) Seleccionar/crear proyecto del cliente
-3) Activar APIs:
+2) Activar APIs:
    - Maps SDK for Android
    - (Opcional) Places API si hay búsquedas
-4) Crear API Key y RESTRINGIR:
+3) Crear API Key y RESTRINGIR:
    - Application restriction: Android apps
    - Añadir: package name + SHA-1
    - API restriction: solo Maps SDK for Android (+ Places si aplica)
 
-5) Poner la key en:
+4) Poner la key en:
    android/local.properties
    GOOGLE_MAPS_API_KEY=TU_API_KEY
 
@@ -114,7 +134,7 @@ NOTA:
 android/local.properties NO se sube a GitHub.
 
 ----------------------------------------
-6) EJECUTAR POR PLATAFORMA
+7) EJECUTAR POR PLATAFORMA
 ----------------------------------------
 ANDROID:
   flutter run
@@ -135,14 +155,14 @@ LINUX:
   flutter run -d linux
 
 ----------------------------------------
-7) SEGURIDAD (OBLIGATORIO)
+8) SEGURIDAD (OBLIGATORIO)
 ----------------------------------------
 NO subir nunca a GitHub:
 - android/local.properties
 - android/app/google-services.json
 - ios/Runner/GoogleService-Info.plist
 - macos/Runner/GoogleService-Info.plist
-- lib/firebase_options.dart
+- lib/firebase_options_local.dart
 
 ========================================
 FIN

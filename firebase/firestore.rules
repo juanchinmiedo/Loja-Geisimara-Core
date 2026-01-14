@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasRole() {
+      return request.auth != null && exists(userDocPath());
+    }
+
+    function role() {
+      return hasRole() ? get(userDocPath()).data.role : null;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth != null && hasRole() && role() == "admin";
+    }
+
+    function isAdminOrStaff() {
+      return request.auth != null
+             && hasRole()
+             && (role() in ["admin", "staff"]);
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /types/{typeId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+    match /workers/{workerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /addons/{addonId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /appointments/{id} {
+      allow read: if isAdminOrStaff() || isOwner(resource.data.userId);
+
+      allow create: if request.auth != null
+                    && (isAdminOrStaff()
+                        || request.resource.data.userId == request.auth.uid)
+                    && request.resource.data.basePrice is number
+                    && request.resource.data.total is number
+                    && request.resource.data.basePrice >= 0
+                    && request.resource.data.total >= 0;
+
+      allow update, delete: if isAdminOrStaff()
+                            || (isOwner(resource.data.userId)
+                                && request.resource.data.userId == resource.data.userId);
+    }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && (!("role" in request.resource.data)
+                        || request.resource.data.role == "user");
+
+      allow update: if isAdmin()
+                    || (isOwner(uid)
+                        && (!("role" in request.resource.data)
+                            || request.resource.data.role == resource.data.role
+                            || request.resource.data.role == "user"));
+
+      allow delete: if isAdmin();
+    }
+
+    match /clients/{uid} {
+      allow read, write: if isAdminOrStaff();
+
+      match /history/{entryId} {
+        allow read, write: if isAdminOrStaff();
+      }
+    }
+  }
+}
