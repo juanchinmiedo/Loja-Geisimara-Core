@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:salon_app/components/date_piceker.dart';
+import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/services/conflict_service.dart';
@@ -158,50 +159,24 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         child: Column(
           children: [
             // Header
-            Container(
+            AppGradientHeader(
+              title: "Admin Schedule",
               height: 240,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xff721c80),
-                    Color.fromARGB(255, 196, 103, 169),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
+              padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
+              centerTitle: true,
+              titleStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.w500,
               ),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
-                child: Column(
-                  children: [
-                    const Row(
-                      children: [
-                        Spacer(),
-                        Text(
-                          "Admin Schedule",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Spacer(),
-                      ],
-                    ),
-                    CustomDatePicker(
-                      initialDate: _selectedDay,
-                      onDateChange: (d) => setState(() => _selectedDay = d),
-                    ),
-                  ],
-                ),
+              child: CustomDatePicker(
+                initialDate: _selectedDay,
+                onDateChange: (d) => setState(() => _selectedDay = d),
               ),
             ),
+
+
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),

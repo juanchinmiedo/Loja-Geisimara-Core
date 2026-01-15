@@ -424,8 +424,23 @@ class ClientService {
         'phone': phone,
         'instagram': ig,
         'search': searchTokens,
+
+        // timestamps
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+
+        // booking request defaults (compatibilidad)
+        'bookingRequestActive': false,
+        'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
+
+        // stats (solo contadores + última cita)
+        'stats': {
+          'totalAppointments': 0,
+          'totalCancelled': 0,
+          'totalNoShow': 0,
+          'lastAppointmentAt': null,
+          'lastAppointmentSummary': '',
+        },
       },
       SetOptions(merge: true),
     );

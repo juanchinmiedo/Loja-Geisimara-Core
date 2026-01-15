@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/components/date_piceker.dart';
+import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/controller/auth_controller.dart';
@@ -132,47 +133,15 @@ class _BookingScreenState extends State<BookingScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // ───────── Cabecera (SIEMPRE se muestra) ─────────
-            Container(
+            AppGradientHeader(
+              title: "Book Your Appointment",
               height: 240,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xff721c80),
-                    Color.fromARGB(255, 196, 103, 169),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.only(top: 38, left: 18, right: 18),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Spacer(),
-                        Text(
-                          "Book Your Appointment",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Spacer(),
-                      ],
-                    ),
-                    CustomDatePicker(),
-                  ],
-                ),
-              ),
+              padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
+              centerTitle: true,
+              child: const CustomDatePicker(),
             ),
+
+
 
             // ───────── Slots (dummy por ahora) ─────────
             Padding(

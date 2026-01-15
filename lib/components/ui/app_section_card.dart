@@ -9,16 +9,19 @@ class AppSectionCard extends StatelessWidget {
     this.background,
     this.borderColor,
     this.titleTextStyle,
+    this.trailing, // ✅ NEW
   });
 
   final String title;
   final Widget child;
   final EdgeInsets padding;
 
-  /// override opcionales
   final Color? background;
   final Color? borderColor;
   final TextStyle? titleTextStyle;
+
+  /// ✅ NEW: widget a la derecha del título (icono / botón / etc.)
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +43,12 @@ class AppSectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: titleStyle),
+          Row(
+            children: [
+              Expanded(child: Text(title, style: titleStyle)),
+              if (trailing != null) trailing!,
+            ],
+          ),
           const SizedBox(height: 10),
           child,
         ],
