@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:salon_app/services/appointment_service.dart';
 
+import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/components/bounded_time_picker.dart';
 import 'package:salon_app/services/client_service.dart';
@@ -74,6 +76,8 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   final phoneFocus = FocusNode();
   final instagramFocus = FocusNode();
 
+  late final AppointmentService _apptService;
+
   // Cerrar teclado
   Future<void> _closeKeyboard() async {
     FocusManager.instance.primaryFocus?.unfocus(); // más fuerte que FocusScope
@@ -95,6 +99,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
 
   // Time
   TimeOfDay? selectedTime;
+  String? _timeError;
 
   // ✅ pulso lento
   late final AnimationController _pulseCtrl;
@@ -107,6 +112,8 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   @override
   void initState() {
     super.initState();
+
+    _apptService = AppointmentService(FirebaseFirestore.instance);
 
     clientSearchCtrl.addListener(() {
       if (mounted) setState(() {});
@@ -687,7 +694,10 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       );
 
                       if (picked != null && mounted) {
-                        setState(() => selectedTime = picked);
+                        setState(() {
+                          selectedTime = picked;
+                          _timeError = null; // ✅ limpia error rojo
+                        });
                       }
                     },
                     borderRadius: BorderRadius.circular(12),
@@ -724,6 +734,22 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                   ),
 
                   const SizedBox(height: 10),
+
+                  if (_timeError != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _timeError!,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
 
                   if (selectedServiceData != null)
                     Row(
@@ -778,9 +804,10 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                         if (!ok) return;
 
                         if (selectedTime == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.timeRequired)),
-                          );
+                          setState(() {
+                            _timeError = s.timeRequired; // ✅ texto rojo dentro del dialog
+                          });
+                          _pulseTime(); // ✅ ya lo tienes, ayuda a llamar la atención
                           return;
                         }
 
@@ -895,32 +922,53 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                               ? (selectedType!['extraPrice'] as num).toDouble()
                               : 0.0;
 
-                          await FirebaseFirestore.instance.collection('appointments').add({
-                            'clientId': clientId,
-                            'clientName': clientName,
-                            'clientCountry': clientCountry,
-                            'clientPhone': clientPhone,
-                            'clientInstagram': clientInstagram,
+                          final db = FirebaseFirestore.instance;
+                            final baseId = BookingRequestUtils.appointmentBaseId(
+                              clientName: clientName,
+                              date: dt,
+                              serviceName: translatedName, // o svcNameKey si prefieres
+                            );
 
-                            'serviceId': selectedServiceId,
-                            'serviceNameKey': svcNameKey,
-                            'serviceName': translatedName,
+                            final apptRef = await BookingRequestUtils.uniqueAppointmentRef(
+                              db: db,
+                              baseId: baseId,
+                            );
 
-                            'typeId': selectedTypeId,
-                            'typeKey': selectedTypeKey,
-                            'typeLabel': typeLabel,
-                            'typeExtraPrice': typeExtraPrice,
+                            await apptRef.set({
+                              'clientId': clientId,
+                              'clientName': clientName,
+                              'clientCountry': clientCountry,
+                              'clientPhone': clientPhone,
+                              'clientInstagram': clientInstagram,
 
-                            'durationMin': durationMin,
-                            'basePrice': basePrice,
-                            'total': basePrice,
+                              'serviceId': selectedServiceId,
+                              'serviceNameKey': svcNameKey,
+                              'serviceName': translatedName,
 
-                            'status': 'scheduled',
-                            'appointmentDate': Timestamp.fromDate(dt),
+                              'typeId': selectedTypeId,
+                              'typeKey': selectedTypeKey,
+                              'typeLabel': typeLabel,
+                              'typeExtraPrice': typeExtraPrice,
 
-                            'createdAt': FieldValue.serverTimestamp(),
-                            'updatedAt': FieldValue.serverTimestamp(),
-                          });
+                              'durationMin': durationMin,
+                              'basePrice': basePrice,
+                              'total': basePrice,
+
+                              'status': 'scheduled',
+                              'appointmentDate': Timestamp.fromDate(dt),
+
+                              'createdAt': FieldValue.serverTimestamp(),
+                              'updatedAt': FieldValue.serverTimestamp(),
+                            });
+
+                            // ✅ sube stats bien (nested map)
+                            await _apptService.onAppointmentCreated(
+                              appointmentId: apptRef.id,
+                              clientId: clientId,
+                              initialStatus: 'scheduled',
+                              appointmentDate: dt,
+                              lastSummary: translatedName,
+                            );
 
                           if (!mounted) return;
                           Navigator.pop(context);

@@ -137,6 +137,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "modeNew": MessageLookupByLibrary.simpleMessage("Nuevo"),
         "mostCommonBadge": MessageLookupByLibrary.simpleMessage("Más común"),
         "nailDecorations": MessageLookupByLibrary.simpleMessage("Decoraciones"),
+        "nailRemove": MessageLookupByLibrary.simpleMessage("Retirar Uñas"),
         "no": MessageLookupByLibrary.simpleMessage("No"),
         "noMatches": MessageLookupByLibrary.simpleMessage("Sin resultados"),
         "noPhotos": MessageLookupByLibrary.simpleMessage("Aún no hay fotos"),

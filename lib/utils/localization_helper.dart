@@ -17,6 +17,7 @@ String trServiceOrAddon(BuildContext context, String? key) {
     "acrylicM": s.acrylicM,
     "fiberM": s.fiberM,
     "simpleVarnish": s.simpleVarnish,
+    "nailRemove": s.nailRemove,
     "gelVarnish": s.gelVarnish,
     "cutilage": s.cutilage,
     "gelVarnishPedicure": s.gelVarnishPedicure,

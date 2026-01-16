@@ -10,6 +10,9 @@ import 'package:salon_app/generated/l10n.dart';
 // ✅ nuevo selector bonito
 import 'package:salon_app/components/service_type_selectors.dart';
 
+// ✅ NEW
+import 'package:salon_app/services/appointment_service.dart';
+
 class EditAppointmentDialog extends StatefulWidget {
   const EditAppointmentDialog({
     super.key,
@@ -55,9 +58,14 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
 
+  // ✅ NEW
+  late final AppointmentService _apptService;
+
   @override
   void initState() {
     super.initState();
+
+    _apptService = AppointmentService(FirebaseFirestore.instance);
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -69,7 +77,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Time init
     final originalTs = widget.data['appointmentDate'];
-    final originalDt = originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
+    final originalDt =
+        originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
     selectedTime = TimeOfDay(hour: originalDt.hour, minute: originalDt.minute);
 
     // Service init
@@ -82,7 +91,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Try load serviceData from cache
     if (selectedServiceId != null) {
-      final cached = widget.services.where((d) => d.id == selectedServiceId).toList();
+      final cached =
+          widget.services.where((d) => d.id == selectedServiceId).toList();
       if (cached.isNotEmpty) {
         selectedServiceData = cached.first.data();
       }
@@ -154,8 +164,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
         final bc = isCommon(b) ? 0 : 1;
         if (ac != bc) return ac - bc;
 
-        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '').toString().toLowerCase();
-        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '').toString().toLowerCase();
+        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '')
+            .toString()
+            .toLowerCase();
+        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '')
+            .toString()
+            .toLowerCase();
         return al.compareTo(bl);
       });
 
@@ -180,10 +194,11 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
         selectedType = common;
         selectedTypeId = (common['_id'] ?? '').toString();
-        selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
+        selectedTypeKey =
+            (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '')
+                .toString();
       });
     } catch (e) {
-      // ✅ si no hay permiso o falla, lo tratamos como "sin types"
       if (!mounted) return;
       setState(() {
         serviceTypes = const [];
@@ -199,16 +214,16 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   void _autoPickExistingOrCommonType() {
     if (serviceTypes.isEmpty) return;
 
-    // 1) intenta por typeId guardado
     if (selectedTypeId.isNotEmpty) {
-      final match = serviceTypes.where((t) => (t['_id'] ?? '').toString() == selectedTypeId).toList();
+      final match = serviceTypes
+          .where((t) => (t['_id'] ?? '').toString() == selectedTypeId)
+          .toList();
       if (match.isNotEmpty) {
         selectedType = match.first;
         return;
       }
     }
 
-    // 2) fallback por typeKey (nameKey o id)
     if (selectedTypeKey.isNotEmpty) {
       final match = serviceTypes.where((t) {
         final key = (t['nameKey'] ?? t['_id'] ?? t['key'] ?? '').toString();
@@ -221,14 +236,14 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
       }
     }
 
-    // 3) common o first
     final common = serviceTypes.firstWhere(
       (t) => t['common'] == true,
       orElse: () => serviceTypes.first,
     );
     selectedType = common;
     selectedTypeId = (common['_id'] ?? '').toString();
-    selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
+    selectedTypeKey =
+        (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -258,39 +273,123 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
   Future<void> _ensureServiceLoaded() async {
     if (selectedServiceData != null || selectedServiceId == null) return;
-    final doc = await FirebaseFirestore.instance.collection('services').doc(selectedServiceId!).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('services')
+        .doc(selectedServiceId!)
+        .get();
     selectedServiceData = doc.data();
   }
 
-  Future<void> _deleteAppointment() async {
+  // ✅ NUEVO dialog bonito: sin "Cancel", con X, y 3 opciones (ambar/rojo/morado)
+  Future<void> _removeAppointment() async {
     final s = S.of(context);
 
-    final confirm = await showDialog<bool>(
+    final clientId = (widget.data['clientId'] ?? '').toString();
+    if (clientId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(s.errorWithValue("Missing clientId in appointment"))),
+      );
+      return;
+    }
+
+    final choice = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(s.deleteAppointmentTitle),
-        content: Text(s.deleteAppointmentBody),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(_, false), child: Text(s.no)),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(_, true),
-            child: Text(s.delete, style: const TextStyle(color: Colors.white)),
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          titlePadding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+          contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+
+          title: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  "Remove appointment",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: s.cancel,
+                onPressed: () => Navigator.pop(ctx, null),
+                icon: const Icon(Icons.close),
+              ),
+            ],
           ),
-        ],
-      ),
+
+          content: Text(
+            "Choose what happened. This updates the appointment status and the client counters.",
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+
+          actions: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ReasonButton(
+                  icon: Icons.event_busy,
+                  title: "Cancelled",
+                  subtitle: "Client cancelled the appointment",
+                  color: Colors.orange,
+                  onTap: () => Navigator.pop(ctx, 'cancelled'),
+                ),
+                const SizedBox(height: 10),
+                _ReasonButton(
+                  icon: Icons.person_off_outlined,
+                  title: "No show",
+                  subtitle: "Client did not attend",
+                  color: Colors.redAccent,
+                  onTap: () => Navigator.pop(ctx, 'noShow'),
+                ),
+                const SizedBox(height: 10),
+                _ReasonButton(
+                  icon: Icons.auto_fix_high,
+                  title: "My error",
+                  subtitle: "Remove permanently (wrong booking)",
+                  color: const Color(0xff721c80), // morado app
+                  onTap: () => Navigator.pop(ctx, 'deletePermanent'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
 
-    if (confirm != true) return;
+    if (choice == null) return;
 
     setState(() => saving = true);
     try {
-      await FirebaseFirestore.instance.collection('appointments').doc(widget.appointmentId).delete();
+      if (choice == 'cancelled') {
+        await _apptService.cancelAppointment(
+          appointmentId: widget.appointmentId,
+          clientId: clientId,
+        );
+      } else if (choice == 'noShow') {
+        await _apptService.noShowAppointment(
+          appointmentId: widget.appointmentId,
+          clientId: clientId,
+        );
+      } else if (choice == 'deletePermanent') {
+        await _apptService.deletePermanent(
+          appointmentId: widget.appointmentId,
+          clientId: clientId,
+        );
+      }
+
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(s.appointmentDeleted)),
-      );
+
+      final msg = (choice == 'cancelled')
+          ? "Marked as cancelled"
+          : (choice == 'noShow')
+              ? "Marked as no-show"
+              : "Deleted permanently";
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -307,8 +406,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Client preview
     final clientName = (widget.data['clientName'] ?? s.clientFallback).toString();
-    final ctry = (widget.data['clientCountry'] is num) ? (widget.data['clientCountry'] as num).toInt() : 0;
-    final ph = (widget.data['clientPhone'] is num) ? (widget.data['clientPhone'] as num).toInt() : 0;
+    final ctry = (widget.data['clientCountry'] is num)
+        ? (widget.data['clientCountry'] as num).toInt()
+        : 0;
+    final ph = (widget.data['clientPhone'] is num)
+        ? (widget.data['clientPhone'] as num).toInt()
+        : 0;
     final ig = (widget.data['clientInstagram'] ?? '').toString();
 
     final contact = [
@@ -319,7 +422,9 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     final width = MediaQuery.of(context).size.width;
     final maxDialogWidth = (width * 0.92).clamp(280.0, 440.0);
 
-    final svcNameKey = (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '').toString();
+    final svcNameKey =
+        (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '')
+            .toString();
     final svcLabel = svcNameKey.isNotEmpty
         ? trServiceOrAddon(context, svcNameKey)
         : (widget.data['serviceName'] ?? s.serviceFallback).toString();
@@ -332,7 +437,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
 
-      // ✅ TÍTULO con X a la derecha
       title: Row(
         children: [
           Expanded(
@@ -344,7 +448,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
             ),
           ),
           IconButton(
-            tooltip: s.cancel, // no crea confusión, es tooltip
+            tooltip: s.cancel,
             onPressed: saving ? null : () => Navigator.pop(context),
             icon: const Icon(Icons.close, color: Colors.black87),
           ),
@@ -359,7 +463,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Client box
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
@@ -380,7 +483,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
                 const SizedBox(height: 12),
 
-                // ✅ selectores bonitos (service + type)
                 ServiceTypeSelectors(
                   services: widget.services,
                   selectedServiceId: selectedServiceId,
@@ -390,7 +492,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                       selectedServiceId = serviceId;
                       selectedServiceData = serviceData;
 
-                      // reset types
                       serviceTypes = const [];
                       loadingTypes = false;
                       selectedType = null;
@@ -414,7 +515,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
                 const SizedBox(height: 12),
 
-                // Time
                 InkWell(
                   onTap: () async {
                     final picked = await BoundedTimePicker.show(
@@ -485,17 +585,15 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
         ),
       ),
 
-      // ✅ abajo izquierda papelera, abajo derecha save
       actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       actions: [
         SizedBox(
           width: double.infinity,
           child: Row(
             children: [
-              // 🗑️ delete icon (rojo “líneas”)
               IconButton(
-                tooltip: s.delete,
-                onPressed: saving ? null : _deleteAppointment,
+                tooltip: "Remove",
+                onPressed: saving ? null : _removeAppointment,
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               ),
 
@@ -514,7 +612,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
                         await _ensureServiceLoaded();
 
-                        // ✅ SOLO requerimos type si realmente cargamos types
                         if (_hasLoadedTypes() && (selectedType == null || selectedTypeId.isEmpty)) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text(s.typeRequired)),
@@ -532,10 +629,13 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             selectedTime.minute,
                           );
 
-                          final durationMin = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
-                          final basePrice = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
+                          final durationMin =
+                              _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                          final basePrice =
+                              _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
 
-                          final maxOverlap = await widget.conflictService.maxOverlapForCandidate(
+                          final maxOverlap =
+                              await widget.conflictService.maxOverlapForCandidate(
                             day: widget.selectedDay,
                             candidateStart: dt,
                             candidateDurationMin: durationMin,
@@ -553,17 +653,23 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             return;
                           }
 
-                          final svcKey =
-                              (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '').toString();
+                          final svcKey = (selectedServiceData?['name'] ??
+                                  widget.data['serviceNameKey'] ??
+                                  '')
+                              .toString();
                           final translatedName = svcKey.isNotEmpty
                               ? trServiceOrAddon(context, svcKey)
                               : (widget.data['serviceName'] ?? s.serviceFallback).toString();
 
                           final typeLabel = (selectedType?['label'] ?? '').toString();
-                          final typeExtraPrice =
-                              (selectedType?['extraPrice'] is num) ? (selectedType!['extraPrice'] as num).toDouble() : 0.0;
+                          final typeExtraPrice = (selectedType?['extraPrice'] is num)
+                              ? (selectedType!['extraPrice'] as num).toDouble()
+                              : 0.0;
 
-                          await FirebaseFirestore.instance.collection('appointments').doc(widget.appointmentId).update({
+                          await FirebaseFirestore.instance
+                              .collection('appointments')
+                              .doc(widget.appointmentId)
+                              .update({
                             'serviceId': selectedServiceId,
                             'serviceNameKey': svcKey,
                             'serviceName': translatedName,
@@ -601,12 +707,75 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : Text(s.save, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                    : Text(
+                        s.save,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                      ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// UI: botón bonito para elegir motivo (ambar / rojo / morado)
+// ─────────────────────────────────────────────────────────────
+class _ReasonButton extends StatelessWidget {
+  const _ReasonButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: color.withOpacity(0.10),
+          border: Border.all(color: color.withOpacity(0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color.withOpacity(0.9)),
+          ],
+        ),
+      ),
     );
   }
 }

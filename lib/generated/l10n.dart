@@ -130,6 +130,16 @@ class S {
     );
   }
 
+  /// `Remover Unhas`
+  String get nailRemove {
+    return Intl.message(
+      'Remover Unhas',
+      name: 'nailRemove',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Reforço com Verniz de Gel`
   String get gelVarnish {
     return Intl.message(

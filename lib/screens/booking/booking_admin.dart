@@ -55,17 +55,16 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         .listen((snap) {
       if (!mounted) return;
       setState(() => _clients = snap.docs);
-      _tryAutoOpenCreateIfNeeded(); // ✅ intento abrir cuando ya hay datos
+      _tryAutoOpenCreateIfNeeded();
     });
 
     // ✅ cache services
     _servicesSub = db.collection('services').snapshots().listen((snap) {
       if (!mounted) return;
       setState(() => _services = snap.docs);
-      _tryAutoOpenCreateIfNeeded(); // ✅ intento abrir cuando ya hay datos
+      _tryAutoOpenCreateIfNeeded();
     });
 
-    // ✅ también intento tras 1 frame (por si cache ya está rápido)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryAutoOpenCreateIfNeeded();
     });
@@ -77,10 +76,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     final pid = widget.preselectedClientId;
     if (pid == null || pid.isEmpty) return;
 
-    // ✅ esperamos a que haya services (y clients ya cacheados)
     if (_services.isEmpty) return;
-
-    // ✅ solo una vez por instancia de pantalla
     if (_autoCreateOpened) return;
 
     _autoCreateOpened = true;
@@ -127,7 +123,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         services: _services,
         clientService: _clientService,
         conflictService: _conflictService,
-        preselectedClientId: preselectedClientId, // ✅ aquí va el id
+        preselectedClientId: preselectedClientId,
       ),
     );
   }
@@ -158,7 +154,6 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
             AppGradientHeader(
               title: "Admin Schedule",
               height: 240,
@@ -175,8 +170,6 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                 onDateChange: (d) => setState(() => _selectedDay = d),
               ),
             ),
-
-
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -226,6 +219,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     .collection('appointments')
                     .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
                     .where('appointmentDate', isLessThanOrEqualTo: dayEnd)
+                    // ✅ AGENDA REAL: solo scheduled
+                    .where('status', isEqualTo: 'scheduled')
                     .orderBy('appointmentDate')
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -277,7 +272,6 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     );
                   }).toList();
 
-                  // conflicts
                   for (final a in items) {
                     int maxOverlap = 0;
                     for (final b in items) {
@@ -423,7 +417,6 @@ class _AdminAppointmentTile extends StatelessWidget {
               margin: const EdgeInsets.only(right: 10),
               decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
             ),
-
             Container(
               width: 56,
               height: 56,
@@ -458,9 +451,7 @@ class _AdminAppointmentTile extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,7 +476,6 @@ class _AdminAppointmentTile extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(width: 8),
             Text(
               total > 0 ? "€${total.toStringAsFixed(0)}" : "",
