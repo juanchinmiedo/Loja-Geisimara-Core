@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:salon_app/services/client_service.dart';
+
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 
@@ -31,6 +33,22 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     super.dispose();
   }
 
+  late final ClientService _clientService;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientService = ClientService(FirebaseFirestore.instance);
+  }
+
+  Future<void> _openCreateClientDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _CreateClientDialog(clientService: _clientService),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -58,18 +76,62 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
             AppGradientHeader(
               title: "Clients",
               subtitle: "Search by name/phone/instagram",
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.95),
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: "Search by tokens (name/phone/instagram)",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  // tamaño del botón + separación
+                  const btnSize = 44.0;
+                  const gap = 10.0;
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.95),
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: "Search by tokens (name/phone/instagram)",
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: gap),
+
+                      // ✅ botón crear cliente (solo icono) - ya no solapa nunca
+                      SizedBox(
+                        height: btnSize,
+                        width: btnSize,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _openCreateClientDialog,
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.22), // un pelín más claro
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.black.withOpacity(0.35)), // ✅ negro como input
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.person_add_alt_1_rounded,
+                                  color: Color(0xff721c80),
+                                  size: 22, // ⬅️ un pelín más grande
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -882,6 +944,165 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _CreateClientDialog extends StatefulWidget {
+  const _CreateClientDialog({required this.clientService});
+  final ClientService clientService;
+
+  @override
+  State<_CreateClientDialog> createState() => _CreateClientDialogState();
+}
+
+class _CreateClientDialogState extends State<_CreateClientDialog> {
+  final formKey = GlobalKey<FormState>();
+
+  final fnCtrl = TextEditingController();
+  final lnCtrl = TextEditingController();
+  final countryCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final igCtrl = TextEditingController();
+
+  bool saving = false;
+
+  int _i(String s) => int.tryParse(s.trim()) ?? 0;
+
+  @override
+  void dispose() {
+    fnCtrl.dispose();
+    lnCtrl.dispose();
+    countryCtrl.dispose();
+    phoneCtrl.dispose();
+    igCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          const Expanded(
+            child: Text("Create client", style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+          IconButton(
+            onPressed: saving ? null : () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      content: Form(
+        key: formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: fnCtrl,
+                decoration: const InputDecoration(labelText: "First name", border: OutlineInputBorder()),
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: lnCtrl,
+                decoration: const InputDecoration(labelText: "Last name", border: OutlineInputBorder()),
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: countryCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "Country", border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 4,
+                    child: TextFormField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "Phone", border: OutlineInputBorder()),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: igCtrl,
+                decoration: const InputDecoration(labelText: "Instagram (optional)", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Phone OR Instagram required",
+                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xff721c80),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            onPressed: saving
+                ? null
+                : () async {
+                    final ok = formKey.currentState?.validate() == true;
+                    if (!ok) return;
+
+                    final ctry = _i(countryCtrl.text);
+                    final ph = _i(phoneCtrl.text);
+                    final ig = widget.clientService.normalizeInstagram(igCtrl.text);
+
+                    final hasPhone = ctry > 0 && ph > 0;
+                    if (!hasPhone && ig.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Phone or Instagram required")),
+                      );
+                      return;
+                    }
+
+                    setState(() => saving = true);
+                    try {
+                      await widget.clientService.createOrGetClient(
+                        context: context,
+                        firstName: fnCtrl.text.trim(),
+                        lastName: lnCtrl.text.trim(),
+                        country: ctry,
+                        phone: ph,
+                        instagramRaw: igCtrl.text,
+                      );
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Client created")),
+                      );
+                    } finally {
+                      if (mounted) setState(() => saving = false);
+                    }
+                  },
+            child: saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text("Create", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+          ),
+        ),
       ],
     );
   }

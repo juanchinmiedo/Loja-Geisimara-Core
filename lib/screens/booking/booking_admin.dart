@@ -217,10 +217,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('appointments')
+                    .where('status', isEqualTo: 'scheduled')
                     .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
                     .where('appointmentDate', isLessThanOrEqualTo: dayEnd)
-                    // ✅ AGENDA REAL: solo scheduled
-                    .where('status', isEqualTo: 'scheduled')
                     .orderBy('appointmentDate')
                     .snapshots(),
                 builder: (context, snapshot) {

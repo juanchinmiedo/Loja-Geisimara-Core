@@ -24,6 +24,7 @@ class ConflictService {
 
     final snap = await _db
         .collection('appointments')
+        .where('status', isEqualTo: 'scheduled')
         .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
         .where('appointmentDate', isLessThanOrEqualTo: dayEnd)
         .orderBy('appointmentDate')
