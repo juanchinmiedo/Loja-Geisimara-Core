@@ -8,6 +8,7 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_preview_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
+import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
@@ -39,6 +40,17 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
 
+  static const Color kPurple = Color(0xff721c80);
+
+  // ✅ Time limits requested
+  // Start: 07:30 - 19:00
+  static const int _startMin = 7 * 60 + 30;
+  static const int _startMax = 19 * 60;
+
+  // End: 09:00 - 21:00
+  static const int _endMin = 9 * 60;
+  static const int _endMax = 21 * 60;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +61,23 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   void dispose() {
     notesCtrl.dispose();
     super.dispose();
+  }
+
+  // ─────────────────────────────
+  // Helpers (time clamp)
+  // ─────────────────────────────
+  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  TimeOfDay _fromMin(int minutes) {
+    final h = (minutes ~/ 60).clamp(0, 23);
+    final m = (minutes % 60).clamp(0, 59);
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
+    final v = _toMin(t);
+    final clamped = v.clamp(min, max);
+    return _fromMin(clamped);
   }
 
   String _fullName(Map<String, dynamic> c, String fallback) {
@@ -78,7 +107,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   Color _modeTint(HomeAdminMode m) {
     switch (m) {
       case HomeAdminMode.looking:
-        return const Color(0xff721c80);
+        return kPurple;
       case HomeAdminMode.cancelled:
         return Colors.orange;
       case HomeAdminMode.noShow:
@@ -115,6 +144,13 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final e = (r['endMin'] as num?)?.toInt() ?? 0;
     String hm(int m) => "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
     return "${hm(s)} - ${hm(e)}";
+  }
+
+  String _ddmmyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yy = d.year.toString();
+    return "$dd/$mm/$yy";
   }
 
   Future<void> _createRequest() async {
@@ -195,16 +231,158 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   }
 
   Widget _openInClientsButton() {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      onPressed: () {
+    return AppIconValuePillButton(
+      color: kPurple,
+      icon: Icons.open_in_new_rounded,
+      label: "Open in Clients",
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      fillOpacity: 0.12,
+      borderOpacity: 0.28,
+      shadow: false,
+      onTap: () {
         context.read<AdminNavProvider>().goToClientsAndOpen(widget.clientId);
         Navigator.pop(context);
       },
-      icon: const Icon(Icons.open_in_new_rounded),
-      label: const Text("Open in Clients"),
+    );
+  }
+
+  Widget _bookingPickers() {
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Responsive: si se aprieta, quitamos iconos.
+        final showIcons = c.maxWidth >= 340;
+
+        final daySelected = preferredDay != null;
+        final startSelected = rangeStart != null;
+        final endSelected = rangeEnd != null;
+
+        Future<void> pickStart() async {
+          final initial = rangeStart ?? const TimeOfDay(hour: 9, minute: 0);
+          final t = await showTimePicker(
+            context: context,
+            initialTime: initial,
+          );
+          if (t == null) return;
+
+          // ✅ clamp to 07:30 - 19:00
+          final fixedStart = _clampTime(t, _startMin, _startMax);
+
+          setState(() {
+            rangeStart = fixedStart;
+
+            // ✅ If end exists and becomes < start, push end up to start (and keep end bounds).
+            if (rangeEnd != null && _toMin(rangeEnd!) < _toMin(fixedStart)) {
+              final adjustedEnd = _clampTime(fixedStart, _endMin, _endMax);
+              rangeEnd = adjustedEnd;
+            }
+          });
+        }
+
+        Future<void> pickEnd() async {
+          // ✅ If start exists, end picker starts at max(start, endMin)
+          TimeOfDay initial;
+          if (rangeStart != null) {
+            final startMin = _toMin(rangeStart!);
+            final minAllowed = startMin < _endMin ? _endMin : startMin;
+            initial = _fromMin(minAllowed);
+          } else {
+            initial = rangeEnd ?? const TimeOfDay(hour: 12, minute: 0);
+          }
+
+          final t = await showTimePicker(
+            context: context,
+            initialTime: initial,
+          );
+          if (t == null) return;
+
+          // ✅ clamp to 09:00 - 21:00
+          final fixedEnd = _clampTime(t, _endMin, _endMax);
+
+          setState(() {
+            // ✅ ensure end >= start
+            if (rangeStart != null && _toMin(fixedEnd) < _toMin(rangeStart!)) {
+              rangeEnd = _clampTime(rangeStart!, _endMin, _endMax);
+            } else {
+              rangeEnd = fixedEnd;
+            }
+          });
+        }
+
+        Widget dayWidget() {
+          if (!daySelected) {
+            return AppIconPillButton(
+              icon: Icons.calendar_month,
+              color: kPurple,
+              shadow: false,
+              tooltip: "Pick preferred day",
+              onTap: _pickPreferredDay,
+            );
+          }
+
+          return AppIconValuePillButton(
+            color: kPurple,
+            icon: Icons.calendar_month,
+            showIcon: showIcons,
+            label: _ddmmyyyy(preferredDay!),
+            shadow: false,
+            onTap: _pickPreferredDay,
+          );
+        }
+
+        Widget startWidget() {
+          if (rangeStart == null) {
+            return AppIconPillButton(
+              icon: Icons.schedule,
+              color: kPurple,
+              shadow: false,
+              tooltip: "Pick start time",
+              onTap: pickStart,
+            );
+          }
+
+          return AppIconValuePillButton(
+            color: kPurple,
+            icon: Icons.schedule,
+            showIcon: true, // ✅ SIEMPRE icono + espacio + valor
+            label: rangeStart!.format(context),
+            shadow: false,
+            onTap: pickStart,
+          );
+        }
+
+        Widget endWidget() {
+          if (!endSelected) {
+            return AppIconPillButton(
+              icon: Icons.alarm_on, // ✅ reloj (otro)
+              color: kPurple,
+              shadow: false,
+              tooltip: "Pick end time",
+              onTap: pickEnd,
+            );
+          }
+
+          // ✅ icono ANTES del valor
+          return AppIconValuePillButton(
+            color: kPurple,
+            icon: Icons.alarm_on,
+            showIcon: true, // ✅ SIEMPRE icono + espacio + valor
+            label: rangeEnd!.format(context),
+            shadow: false,
+            onTap: pickEnd,
+          );
+        }
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            dayWidget(),
+            startWidget(),
+            endWidget(),
+          ],
+        );
+      },
     );
   }
 
@@ -216,15 +394,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     required int requestCount,
     required bool allowOuterScroll,
   }) {
-    // base aproximada sin la lista
-    const base = 520.0;
+    const base = 468.0;
     const perItem = 118.0;
 
     final visible = requestCount <= 0 ? 0 : (requestCount == 1 ? 1 : 2);
     final raw = base + (visible * perItem);
 
-    // si permitimos scroll global (móvil muy pequeño / teclado / form abierto),
-    // bajamos el mínimo para que no explote el layout.
     final minH = allowOuterScroll ? screenH * 0.35 : screenH * 0.42;
     final maxH = screenH * 0.82;
 
@@ -241,7 +416,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   Widget _requestTile({
     required String requestId,
     required Map<String, dynamic> br,
-    required Color purple,
   }) {
     final days = (br['preferredDays'] as List?) ?? const [];
     final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
@@ -280,13 +454,13 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               ],
             ),
           ),
-
           Positioned(
             top: 0,
             right: 0,
             child: AppIconPillButton(
               icon: Icons.delete_outline,
               color: Colors.redAccent,
+              shadow: false,
               tooltip: "Delete request",
               onTap: () async {
                 final ok = await showDialog<bool>(
@@ -309,13 +483,13 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               },
             ),
           ),
-
           Positioned(
             bottom: 0,
             right: 0,
             child: AppIconPillButton(
               icon: Icons.edit_outlined,
-              color: purple,
+              color: kPurple,
+              shadow: false,
               tooltip: "Edit notes",
               onTap: () async {
                 final editNotes = TextEditingController(text: notes);
@@ -336,7 +510,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: purple),
+                        style: ElevatedButton.styleFrom(backgroundColor: kPurple),
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text("Save", style: TextStyle(color: Colors.white)),
                       ),
@@ -363,8 +537,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   Widget _activeRequestsSection({
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   }) {
-    const purple = Color(0xff721c80);
-
     if (docs.isEmpty) {
       return AppSectionCard(
         title: "Active booking requests",
@@ -392,7 +564,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                   return _requestTile(
                     requestId: d.id,
                     br: d.data(),
-                    purple: purple,
                   );
                 },
               )
@@ -403,7 +574,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     _requestTile(
                       requestId: docs[i].id,
                       br: docs[i].data(),
-                      purple: purple,
                     ),
                   ],
                 ],
@@ -417,7 +587,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> activeRequestDocs,
   }) {
     final looking = client['bookingRequestActive'] == true;
-    const purple = Color(0xff721c80);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,7 +603,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               ),
               AsyncOptimisticSwitch(
                 value: looking,
-                switchActiveColor: purple,
+                switchActiveColor: kPurple,
                 onSave: (v) async {
                   if (!v) {
                     await _confirmAndDisableLooking();
@@ -458,7 +627,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
             Expanded(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: purple,
+                  backgroundColor: kPurple,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: () => setState(() => _creatingRequest = !_creatingRequest),
@@ -489,53 +658,13 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: _pickPreferredDay,
-                  icon: const Icon(Icons.calendar_month),
-                  label: Text(
-                    preferredDay == null
-                        ? "Pick preferred day (optional)"
-                        : "Day: ${BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(BookingRequestUtils.yyyymmdd(preferredDay!))}",
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          final t = await showTimePicker(
-                            context: context,
-                            initialTime: rangeStart ?? const TimeOfDay(hour: 9, minute: 0),
-                          );
-                          if (t == null) return;
-                          setState(() => rangeStart = t);
-                        },
-                        child: Text(rangeStart == null ? "Start time" : "Start: ${rangeStart!.format(context)}"),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          final t = await showTimePicker(
-                            context: context,
-                            initialTime: rangeEnd ?? const TimeOfDay(hour: 12, minute: 0),
-                          );
-                          if (t == null) return;
-                          setState(() => rangeEnd = t);
-                        },
-                        child: Text(rangeEnd == null ? "End time" : "End: ${rangeEnd!.format(context)}"),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                _bookingPickers(),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: purple,
+                      backgroundColor: kPurple,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: _createRequest,
@@ -552,7 +681,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         ],
 
         const SizedBox(height: 12),
-
         _activeRequestsSection(docs: activeRequestDocs),
       ],
     );
@@ -603,8 +731,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     child: Text("Requested: $totalAppointments", style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                   AppPill(
-                    background: const Color(0xff721c80).withOpacity(0.10),
-                    borderColor: const Color(0xff721c80).withOpacity(0.22),
+                    background: kPurple.withOpacity(0.10),
+                    borderColor: kPurple.withOpacity(0.22),
                     child: Text("Attended: $totalScheduled", style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                   AppPill(
@@ -655,10 +783,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
             final screenH = MediaQuery.of(context).size.height;
 
-            // ✅ Solo permitimos scroll global si:
-            // - form abierto (ocupa mucho)
-            // - móvil muy pequeño
-            // - teclado abierto (viewInsets)
             final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
             final allowOuterScroll = _creatingRequest || keyboardOpen || screenH < 640;
 
@@ -683,7 +807,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
                     Row(
                       children: [
                         Expanded(
@@ -702,7 +825,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                       ],
                     ),
                     const SizedBox(height: 10),
-
                     AppPreviewCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -713,29 +835,18 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
-                    // ✅ Aquí evitamos overflow:
-                    // - Normal: NO scroll global (NeverScrollable)
-                    // - Caso pequeño/form/teclado: scroll global habilitado
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, c) {
-                          final body = (widget.mode == HomeAdminMode.looking)
+                      child: SingleChildScrollView(
+                        physics: allowOuterScroll
+                            ? const ClampingScrollPhysics()
+                            : const NeverScrollableScrollPhysics(),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: (widget.mode == HomeAdminMode.looking)
                               ? _lookingBody(client: data, activeRequestDocs: activeDocs)
-                              : _statsBody(data);
-
-                          return SingleChildScrollView(
-                            physics: allowOuterScroll
-                                ? const ClampingScrollPhysics()
-                                : const NeverScrollableScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: c.maxHeight),
-                              child: body,
-                            ),
-                          );
-                        },
+                              : _statsBody(data),
+                        ),
                       ),
                     ),
                   ],

@@ -15,29 +15,35 @@ class AppIconPillButton extends StatelessWidget {
     this.activeFillOpacity = 0.20,
     this.activeBorderOpacity = 0.55,
     this.active = false,
+
+    /// Shadow (keep, but default OFF for your new style)
+    this.shadow = false,
+    this.shadowOpacity = 0.18,
+    this.shadowBlur = 14,
+    this.shadowOffset = const Offset(0, 6),
   });
 
   final IconData icon;
   final VoidCallback? onTap;
   final Color color;
 
-  /// Tamaño total del “circulito”
   final double size;
-
-  /// Tamaño del icono dentro
   final double iconSize;
 
   final String? tooltip;
   final bool enabled;
 
-  /// Look similar a tus pills (fondo suave + borde)
   final double fillOpacity;
   final double borderOpacity;
 
-  /// Si quieres reutilizarlo como “selected”
   final bool active;
   final double activeFillOpacity;
   final double activeBorderOpacity;
+
+  final bool shadow;
+  final double shadowOpacity;
+  final double shadowBlur;
+  final Offset shadowOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +64,15 @@ class AppIconPillButton extends StatelessWidget {
             color: bg,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: br),
+            boxShadow: shadow
+                ? [
+                    BoxShadow(
+                      color: color.withOpacity(shadowOpacity),
+                      blurRadius: shadowBlur,
+                      offset: shadowOffset,
+                    ),
+                  ]
+                : null,
           ),
           child: Center(
             child: Icon(
