@@ -96,4 +96,14 @@ class BookingRequestUtils {
     // fallback final (rarísimo)
     return col.doc();
   }
+
+  static String formatYyyyMmDdToDdMmYyyy(String yyyymmdd) {
+    if (yyyymmdd.length != 8) return yyyymmdd;
+
+    final y = yyyymmdd.substring(0, 4);
+    final m = yyyymmdd.substring(4, 6);
+    final d = yyyymmdd.substring(6, 8);
+
+    return "$d/$m/$y";
+  }
 }
