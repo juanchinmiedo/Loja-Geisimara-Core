@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<UserProvider>(
           create: (_) {
             final provider = UserProvider();
-            provider.setUser(FirebaseAuth.instance.currentUser);
+            provider.bindAuthStream(); // ✅
             return provider;
           },
         ),
