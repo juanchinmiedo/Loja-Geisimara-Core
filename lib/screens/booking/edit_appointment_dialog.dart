@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import 'package:salon_app/provider/user_provider.dart';
 
 import 'package:salon_app/components/bounded_time_picker.dart';
 import 'package:salon_app/services/conflict_service.dart';
@@ -629,18 +632,43 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             selectedTime.minute,
                           );
 
-                          final durationMin =
-                              _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
-                          final basePrice =
-                              _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
+                          final durationMin = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                          final basePrice = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
 
-                          final maxOverlap =
-                              await widget.conflictService.maxOverlapForCandidate(
-                            day: widget.selectedDay,
-                            candidateStart: dt,
-                            candidateDurationMin: durationMin,
-                            excludeAppointmentId: widget.appointmentId,
-                          );
+                          final userProv = context.read<UserProvider>();
+
+                          final existingWorkerId = (widget.data['workerId'] ?? '').toString().trim();
+
+                          // ✅ workerId efectivo:
+                          // - si el appointment ya tiene workerId -> ese
+                          // - si NO tiene (appointment viejo) -> intentamos asignarlo según el usuario actual
+                          String? effectiveWorkerId = existingWorkerId.isNotEmpty ? existingWorkerId : null;
+
+                          if (effectiveWorkerId == null || effectiveWorkerId.isEmpty) {
+                            // si es worker: su workerId
+                            if (userProv.isWorker && (userProv.workerId ?? '').isNotEmpty) {
+                              effectiveWorkerId = userProv.workerId!;
+                            }
+                            // si es admin: el seleccionado (no debería ser null si va a crear/editar en un worker concreto)
+                            if (userProv.isAdmin && (userProv.selectedWorkerId ?? '').isNotEmpty) {
+                              effectiveWorkerId = userProv.selectedWorkerId!;
+                            }
+                          }
+
+                          // Si sigue null, no bloqueamos el edit (por compat),
+                          // pero NO podremos calcular conflictos por worker correctamente.
+                          final bool canCheckConflicts = effectiveWorkerId != null && effectiveWorkerId.isNotEmpty;
+
+                          int maxOverlap = 0;
+                          if (canCheckConflicts) {
+                            maxOverlap = await widget.conflictService.maxOverlapForCandidate(
+                              day: widget.selectedDay,
+                              candidateStart: dt,
+                              candidateDurationMin: durationMin,
+                              workerId: effectiveWorkerId,
+                              excludeAppointmentId: widget.appointmentId,
+                            );
+                          }
 
                           final canSave = await widget.conflictService.confirmSaveIfConflict(
                             context: context,
@@ -682,6 +710,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             'durationMin': durationMin,
                             'basePrice': basePrice,
                             'total': basePrice,
+
+                            if (canCheckConflicts && existingWorkerId.isEmpty) 'workerId': effectiveWorkerId,
 
                             'appointmentDate': Timestamp.fromDate(dt),
                             'updatedAt': FieldValue.serverTimestamp(),

@@ -17,14 +17,17 @@ class ConflictService {
     required DateTime day,
     required DateTime candidateStart,
     required int candidateDurationMin,
+    required String workerId, // ✅ ahora ES POR WORKER
     String? excludeAppointmentId,
   }) async {
     final dayStart = Timestamp.fromDate(DateTime(day.year, day.month, day.day));
     final dayEnd = Timestamp.fromDate(DateTime(day.year, day.month, day.day, 23, 59, 59, 999));
 
+    // ✅ Importantísimo: conflicto solo contra citas del mismo worker
     final snap = await _db
         .collection('appointments')
         .where('status', isEqualTo: 'scheduled')
+        .where('workerId', isEqualTo: workerId)
         .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
         .where('appointmentDate', isLessThanOrEqualTo: dayEnd)
         .orderBy('appointmentDate')

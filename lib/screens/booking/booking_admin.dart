@@ -1,15 +1,25 @@
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import 'package:salon_app/components/date_piceker.dart';
+import 'package:salon_app/provider/user_provider.dart';
+import 'package:salon_app/provider/booking_view_provider.dart';
+
+import 'package:salon_app/components/pretty_date_strip.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
+
 import 'package:salon_app/utils/localization_helper.dart';
+
+import 'package:salon_app/widgets/worker_selector_pills.dart';
+import 'package:salon_app/widgets/booking_view_toggle.dart';
+
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/services/conflict_service.dart';
+
 import 'package:salon_app/screens/booking/create_appointment_dialog.dart';
 import 'package:salon_app/screens/booking/edit_appointment_dialog.dart';
+import 'package:salon_app/screens/booking/week_calendar_view.dart';
 
 class BookingAdminScreen extends StatefulWidget {
   const BookingAdminScreen({super.key, this.preselectedClientId});
@@ -21,8 +31,7 @@ class BookingAdminScreen extends StatefulWidget {
 }
 
 class _BookingAdminScreenState extends State<BookingAdminScreen> {
-  DateTime _selectedDay =
-      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+  DateTime _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
   DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
   DateTime _endOfDay(DateTime d) =>
@@ -39,151 +48,218 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   bool _autoCreateOpened = false; // ✅ evita abrir 2 veces
 
-  @override
-  void initState() {
-    super.initState();
-    final db = FirebaseFirestore.instance;
-    _clientService = ClientService(db);
-    _conflictService = ConflictService(db);
+  // ───────────────── Colors (services) ─────────────────
 
-    // ✅ cache clients
-    _clientsSub = db
-        .collection('clients')
-        .orderBy('updatedAt', descending: true)
-        .limit(200)
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      setState(() => _clients = snap.docs);
-      _tryAutoOpenCreateIfNeeded();
-    });
-
-    // ✅ cache services
-    _servicesSub = db.collection('services').snapshots().listen((snap) {
-      if (!mounted) return;
-      setState(() => _services = snap.docs);
-      _tryAutoOpenCreateIfNeeded();
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _tryAutoOpenCreateIfNeeded();
-    });
+  Color _colorFromHex(String hex) {
+    final clean = hex.replaceAll('#', '').trim();
+    if (clean.length != 6) return const Color(0xff721c80);
+    final v = int.parse('FF$clean', radix: 16);
+    return Color(v);
   }
 
-  void _tryAutoOpenCreateIfNeeded() {
-    if (!mounted) return;
-
-    final pid = widget.preselectedClientId;
-    if (pid == null || pid.isEmpty) return;
-
-    if (_services.isEmpty) return;
-    if (_autoCreateOpened) return;
-
-    _autoCreateOpened = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await _openCreateAppointmentDialog(preselectedClientId: pid);
-    });
+  Map<String, Color> _serviceColorsById() {
+    final out = <String, Color>{};
+    for (final s in _services) {
+      final data = s.data();
+      final hex = (data['colorHex'] ?? '').toString();
+      if (hex.isNotEmpty) {
+        out[s.id] = _colorFromHex(hex);
+      }
+    }
+    return out;
   }
+
+  // ───────────────── Week helpers ─────────────────
+
+  DateTime _startOfWeekMonday(DateTime d) {
+    final x = DateTime(d.year, d.month, d.day);
+    final diff = x.weekday - DateTime.monday;
+    return x.subtract(Duration(days: diff));
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _isCurrentWeek(DateTime weekStart) {
+    final now = DateTime.now();
+    final wsNow = _startOfWeekMonday(now);
+    return _isSameDay(wsNow, weekStart);
+  }
+
+  // ───────────────── Lifecycle ─────────────────
 
   @override
-  void dispose() {
-    _clientsSub?.cancel();
-    _servicesSub?.cancel();
-    super.dispose();
-  }
+    void initState() {
+      super.initState();
+      final db = FirebaseFirestore.instance;
+      _clientService = ClientService(db);
+      _conflictService = ConflictService(db);
 
-  int _minutesOverlap(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) {
-    final start = aStart.isAfter(bStart) ? aStart : bStart;
-    final end = aEnd.isBefore(bEnd) ? aEnd : bEnd;
-    final diff = end.difference(start).inMinutes;
-    return diff > 0 ? diff : 0;
-  }
+      // ✅ cache clients
+      _clientsSub = db
+          .collection('clients')
+          .orderBy('updatedAt', descending: true)
+          .limit(200)
+          .snapshots()
+          .listen((snap) {
+        if (!mounted) return;
+        setState(() => _clients = snap.docs);
+        _tryAutoOpenCreateIfNeeded();
+      });
 
-  Color _conflictColorFromMaxOverlap(int maxOverlapMin) {
-    if (maxOverlapMin <= 0) return Colors.green;
-    if (maxOverlapMin < 30) return Colors.amber;
-    return Colors.red;
-  }
+      // ✅ cache services
+      _servicesSub = db.collection('services').snapshots().listen((snap) {
+        if (!mounted) return;
+        setState(() => _services = snap.docs);
+        _tryAutoOpenCreateIfNeeded();
+      });
 
-  Future<void> _openCreateAppointmentDialog({String? preselectedClientId}) async {
-    if (_services.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Services are still loading...")),
-      );
-      return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tryAutoOpenCreateIfNeeded();
+      });
     }
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => CreateAppointmentDialog(
-        selectedDay: _selectedDay,
-        clients: _clients,
-        services: _services,
-        clientService: _clientService,
-        conflictService: _conflictService,
-        preselectedClientId: preselectedClientId,
-      ),
-    );
-  }
+    void _tryAutoOpenCreateIfNeeded() {
+      if (!mounted) return;
 
-  Future<void> _openEditAppointmentDialog({
-    required String appointmentId,
-    required Map<String, dynamic> data,
-  }) async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => EditAppointmentDialog(
-        appointmentId: appointmentId,
-        data: data,
-        selectedDay: _selectedDay,
-        services: _services,
-        conflictService: _conflictService,
-      ),
-    );
-  }
+      final pid = widget.preselectedClientId;
+      if (pid == null || pid.isEmpty) return;
 
-  @override
+      if (_services.isEmpty) return;
+      if (_autoCreateOpened) return;
+
+      _autoCreateOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _openCreateAppointmentDialog(preselectedClientId: pid);
+      });
+    }
+
+    @override
+    void dispose() {
+      _clientsSub?.cancel();
+      _servicesSub?.cancel();
+      super.dispose();
+    }
+
+    // ───────────────── Conflict helpers (Day view) ─────────────────
+
+    int _minutesOverlap(
+        DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) {
+      final start = aStart.isAfter(bStart) ? aStart : bStart;
+      final end = aEnd.isBefore(bEnd) ? aEnd : bEnd;
+      final diff = end.difference(start).inMinutes;
+      return diff > 0 ? diff : 0;
+    }
+
+    Color _conflictColorFromMaxOverlap(int maxOverlapMin) {
+      if (maxOverlapMin <= 0) return Colors.green;
+      if (maxOverlapMin < 30) return Colors.amber;
+      return Colors.red;
+    }
+
+    // ───────────────── Dialog openers ─────────────────
+    // ✅ Añadimos initialStartTime opcional (para Week tap vacío)
+    // REQUIERE: CreateAppointmentDialog tenga el parámetro:
+    // final TimeOfDay? initialStartTime;
+    Future<void> _openCreateAppointmentDialog({
+      String? preselectedClientId,
+      TimeOfDay? initialStartTime,
+      DateTime? selectedDayOverride, // ✅ NUEVO
+    }) async {
+      if (_services.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Services are still loading...")),
+        );
+        return;
+      }
+
+      final day = selectedDayOverride ?? _selectedDay; // ✅ usa el día tocado si viene
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => CreateAppointmentDialog(
+          selectedDay: day, // ✅ IMPORTANTÍSIMO
+          clients: _clients,
+          services: _services,
+          clientService: _clientService,
+          conflictService: _conflictService,
+          preselectedClientId: preselectedClientId,
+          initialStartTime: initialStartTime,
+        ),
+      );
+    }
+
+    Future<void> _openEditAppointmentDialog({
+      required String appointmentId,
+      required Map<String, dynamic> data,
+    }) async {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => EditAppointmentDialog(
+          appointmentId: appointmentId,
+          data: data,
+          selectedDay: _selectedDay,
+          services: _services,
+          conflictService: _conflictService,
+        ),
+      );
+    }
+
+    // ───────────────── Build ─────────────────
+
+    @override
   Widget build(BuildContext context) {
     final dayStart = Timestamp.fromDate(_startOfDay(_selectedDay));
     final dayEnd = Timestamp.fromDate(_endOfDay(_selectedDay));
 
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            AppGradientHeader(
-              title: "Admin Schedule",
-              height: 240,
-              padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
-              centerTitle: true,
-              titleStyle: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                letterSpacing: 1.1,
-                fontWeight: FontWeight.w500,
-              ),
-              child: CustomDatePicker(
-                initialDate: _selectedDay,
-                onDateChange: (d) => setState(() => _selectedDay = d),
-              ),
-            ),
+    final userProv = context.watch<UserProvider>();
+    final workerFilter = userProv.workerIdForQueries(); // null = ALL (solo admin)
+    final canCreate = !(userProv.isAdmin &&
+        (userProv.selectedWorkerId == null || userProv.selectedWorkerId!.isEmpty));
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              child: Row(
-                children: [
-                  const Text(
-                    "Appointments",
-                    style: TextStyle(
-                      color: Color.fromARGB(255, 45, 42, 42),
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+    final view = context.watch<BookingViewProvider>();
+
+    // ✅ Header + pills + row
+    Widget headerAndControls() {
+      return Column(
+        children: [
+          AppGradientHeader(
+            title: "Admin Schedule",
+            height: 240,
+            padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
+            centerTitle: true,
+            titleStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w500,
+            ),
+            child: PrettyDateStrip(
+              selectedDate: _selectedDay,
+              onChange: (d) => setState(() => _selectedDay = d),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const WorkerSelectorPills(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                const Text(
+                  "Appointments",
+                  style: TextStyle(
+                    color: Color.fromARGB(255, 45, 42, 42),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const Spacer(),
+                ),
+                const Spacer(),
+                const BookingViewToggle(),
+                const SizedBox(width: 10),
+                if (canCreate)
                   InkWell(
                     onTap: () => _openCreateAppointmentDialog(),
                     borderRadius: BorderRadius.circular(14),
@@ -208,100 +284,225 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                       ),
                     ),
                   ),
-                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ✅ WEEK: sin scroll padre, para que la rejilla llegue hasta el final dentro de sí misma
+    if (view.isWeek) {
+      return Scaffold(
+        body: Column(
+          children: [
+            headerAndControls(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: _buildWeekView(
+                  workerFilter: workerFilter,
+                  canCreate: canCreate,
+                ),
               ),
             ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      );
+    }
 
+    // ✅ DAY: tu scroll de siempre
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            headerAndControls(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('appointments')
-                    .where('status', isEqualTo: 'scheduled')
-                    .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
-                    .where('appointmentDate', isLessThanOrEqualTo: dayEnd)
-                    .orderBy('appointmentDate')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.only(top: 24),
-                      child: Center(child: CircularProgressIndicator(color: Colors.purple)),
-                    );
-                  }
-
-                  if (snapshot.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        "Error appointments: ${snapshot.error}",
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    );
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 12, bottom: 24),
-                      child: Text(
-                        "No appointments for this day",
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                    );
-                  }
-
-                  final docs = snapshot.data!.docs;
-
-                  final items = docs.map((d) {
-                    final data = d.data() as Map<String, dynamic>? ?? {};
-                    final ts = data['appointmentDate'];
-                    final start = ts is Timestamp ? ts.toDate() : DateTime.now();
-
-                    final dur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 0;
-                    final safeDur = dur <= 0 ? 0 : dur;
-                    final end = start.add(Duration(minutes: safeDur));
-
-                    return _ApptVM(
-                      id: d.id,
-                      doc: d as QueryDocumentSnapshot,
-                      data: data,
-                      start: start,
-                      end: end,
-                      durationMin: safeDur,
-                    );
-                  }).toList();
-
-                  for (final a in items) {
-                    int maxOverlap = 0;
-                    for (final b in items) {
-                      if (a.id == b.id) continue;
-                      final overlap = _minutesOverlap(a.start, a.end, b.start, b.end);
-                      if (overlap > maxOverlap) maxOverlap = overlap;
-                    }
-                    a.maxOverlapMin = maxOverlap;
-                    a.dotColor = _conflictColorFromMaxOverlap(maxOverlap);
-                  }
-
-                  return Column(
-                    children: items.map((vm) {
-                      return _AdminAppointmentTile(
-                        doc: vm.doc,
-                        dotColor: vm.dotColor ?? Colors.green,
-                        onTap: () => _openEditAppointmentDialog(
-                          appointmentId: vm.id,
-                          data: vm.data,
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
+              child: _buildDayView(
+                dayStart: dayStart,
+                dayEnd: dayEnd,
+                workerFilter: workerFilter,
               ),
             ),
-
             const SizedBox(height: 24),
           ],
         ),
       ),
+    );
+  }
+  // ───────────────── Week view ─────────────────
+
+  Widget _buildWeekView({
+    required String? workerFilter,
+    required bool canCreate,
+  }) {
+    final weekStart = _startOfWeekMonday(_selectedDay);
+    final weekEnd = _endOfDay(weekStart.add(const Duration(days: 6)));
+
+    Query<Map<String, dynamic>> base = FirebaseFirestore.instance
+        .collection('appointments')
+        .where('status', isEqualTo: 'scheduled')
+        .where('appointmentDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(weekStart)))
+        .where('appointmentDate',
+            isLessThanOrEqualTo: Timestamp.fromDate(weekEnd));
+
+    if (workerFilter != null && workerFilter.isNotEmpty) {
+      base = base.where('workerId', isEqualTo: workerFilter);
+    }
+
+    final stream = base.orderBy('appointmentDate').snapshots();
+    final colors = _serviceColorsById();
+
+    return WeekCalendarView(
+      weekStartMonday: weekStart,
+      selectedDay: _selectedDay,        // ✅
+      stream: stream,
+      serviceColorById: colors,
+      startHour: 7,
+      endHour: 21,
+
+      onWeekChanged: (newWeekStart) {
+        setState(() {
+          if (_isCurrentWeek(newWeekStart)) {
+            final now = DateTime.now();
+            _selectedDay = DateTime(now.year, now.month, now.day);
+          } else {
+            _selectedDay = DateTime(newWeekStart.year, newWeekStart.month, newWeekStart.day);
+          }
+        });
+      },
+
+      onSelectDay: (day) {
+        setState(() => _selectedDay = DateTime(day.year, day.month, day.day));
+      },
+
+      onTapAppointment: (id, data) {
+        final ts = data['appointmentDate'];
+        if (ts is Timestamp) {
+          final d = ts.toDate();
+          final dayOnly = DateTime(d.year, d.month, d.day);
+
+          // ✅ fija el selectedDay al día del appointment (y por tanto la semana visible)
+          setState(() => _selectedDay = dayOnly);
+        }
+
+        _openEditAppointmentDialog(appointmentId: id, data: data);
+      },
+
+      onTapEmpty: (day, tod) async {
+        if (!canCreate) return;
+
+        await _openCreateAppointmentDialog(
+          preselectedClientId: widget.preselectedClientId,
+          initialStartTime: tod,
+          selectedDayOverride: day, // ✅ para crear en el día tocado sin tocar datepicker
+        );
+      },
+    );
+  }
+
+  // ───────────────── Day view (tu código original, casi igual) ─────────────────
+
+  Widget _buildDayView({
+    required Timestamp dayStart,
+    required Timestamp dayEnd,
+    required String? workerFilter,
+  }) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: () {
+        final base = FirebaseFirestore.instance
+            .collection('appointments')
+            .where('status', isEqualTo: 'scheduled')
+            .where('appointmentDate', isGreaterThanOrEqualTo: dayStart)
+            .where('appointmentDate', isLessThanOrEqualTo: dayEnd);
+
+        final Query<Map<String, dynamic>> q =
+            (workerFilter != null && workerFilter.isNotEmpty)
+                ? base.where('workerId', isEqualTo: workerFilter)
+                : base;
+
+        return q.orderBy('appointmentDate').snapshots();
+      }(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.purple),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              "Error appointments: ${snapshot.error}",
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 24),
+            child: Text(
+              "No appointments for this day",
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+          );
+        }
+
+        final docs = snapshot.data!.docs;
+
+        final items = docs.map((d) {
+          final data = d.data(); // ✅ ya tipado
+          final ts = data['appointmentDate'];
+          final start = ts is Timestamp ? ts.toDate() : DateTime.now();
+
+          final dur = (data['durationMin'] is num)
+              ? (data['durationMin'] as num).toInt()
+              : 0;
+          final safeDur = dur <= 0 ? 0 : dur;
+          final end = start.add(Duration(minutes: safeDur));
+
+          return _ApptVM(
+            id: d.id,
+            doc: d,
+            data: data,
+            start: start,
+            end: end,
+            durationMin: safeDur,
+          );
+        }).toList();
+
+        for (final a in items) {
+          int maxOverlap = 0;
+          for (final b in items) {
+            if (a.id == b.id) continue;
+            final overlap = _minutesOverlap(a.start, a.end, b.start, b.end);
+            if (overlap > maxOverlap) maxOverlap = overlap;
+          }
+          a.maxOverlapMin = maxOverlap;
+          a.dotColor = _conflictColorFromMaxOverlap(maxOverlap);
+        }
+
+        return Column(
+          children: items.map((vm) {
+            return _AdminAppointmentTile(
+              doc: vm.doc,
+              dotColor: vm.dotColor ?? Colors.green,
+              onTap: () => _openEditAppointmentDialog(
+                appointmentId: vm.id,
+                data: vm.data,
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }

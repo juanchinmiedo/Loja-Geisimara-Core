@@ -1,43 +1,55 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class RoleHelper {
-  static Future<String?> getMyRole() async {
+  static Future<List<String>> getMyRoles({bool forceRefresh = true}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
+    if (user == null) return [];
 
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
+    // ✅ forceRefresh=true para que pille claims recién puestos
+    final token = await user.getIdTokenResult(forceRefresh);
+    final claims = token.claims ?? {};
 
-    if (!snap.exists) return null;
+    final raw = claims['roles'];
+    if (raw is List) {
+      return raw.whereType<String>().map((e) => e.toLowerCase().trim()).toList();
+    }
 
-    final data = snap.data();
-    if (data == null) return null;
-
-    final role = data['role'];
-    if (role is String && role.isNotEmpty) return role.toLowerCase().trim();
-
-    return null;
+    return [];
   }
 
+  /// Compat con el viejo "role" string (devuelve el primero si quieres).
+  /// Pero tu app ya debería usar roles() / isAdmin / isWorker.
+  static Future<String?> getMyRole() async {
+    final roles = await getMyRoles();
+    if (roles.isEmpty) return null;
+
+    // preferimos admin si existe
+    if (roles.contains('admin')) return 'admin';
+    if (roles.contains('worker')) return 'worker';
+    return roles.first;
+  }
+
+  /// Viejo método: admin o staff
+  /// Ahora: admin o worker
   static Future<bool> isAdminOrStaff() async {
-    final role = await getMyRole();
-    return role == 'admin' || role == 'staff';
+    final roles = await getMyRoles();
+    return roles.contains('admin') || roles.contains('worker');
   }
 
   static Future<bool> isAdmin() async {
-    final role = await getMyRole();
-    return role == 'admin';
+    final roles = await getMyRoles();
+    return roles.contains('admin');
   }
 
+  /// staff antiguo -> worker nuevo
   static Future<bool> isStaff() async {
-    final role = await getMyRole();
-    return role == 'staff';
+    final roles = await getMyRoles();
+    return roles.contains('worker');
   }
 
   static Future<bool> canUseAdminMode() async {
+    // Antes: admin/staff podían
+    // Ahora: esto ya debería basarse en claims, así que se queda igual:
     return isAdminOrStaff();
   }
 }

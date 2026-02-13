@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:salon_app/components/date_piceker.dart';
+import 'package:salon_app/components/pretty_date_strip.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/utils/localization_helper.dart';
@@ -138,10 +138,13 @@ class _BookingScreenState extends State<BookingScreen> {
               height: 240,
               padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
               centerTitle: true,
-              child: const CustomDatePicker(),
+              child: PrettyDateStrip(
+                selectedDate: DateTime.now(),
+                onChange: (date) {
+                  // Handle date change
+                },
+              ),
             ),
-
-
 
             // ───────── Slots (dummy por ahora) ─────────
             Padding(

@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import 'package:salon_app/provider/user_provider.dart';
 
 import 'package:salon_app/services/appointment_service.dart';
 
@@ -28,8 +31,10 @@ class CreateAppointmentDialog extends StatefulWidget {
     required this.clientService,
     required this.conflictService,
     this.preselectedClientId,
+    this.initialStartTime,
   });
 
+  final TimeOfDay? initialStartTime;
   final String? preselectedClientId;
 
   final DateTime selectedDay;
@@ -101,6 +106,9 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   TimeOfDay? selectedTime;
   String? _timeError;
 
+  bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
   // ✅ pulso lento
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
@@ -112,6 +120,12 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   @override
   void initState() {
     super.initState();
+
+    if (widget.initialStartTime != null) {
+      selectedTime = widget.initialStartTime;
+      // opcional: limpia error si lo tenías por no haber hora
+      _timeError = null;
+    }
 
     _apptService = AppointmentService(FirebaseFirestore.instance);
 
@@ -696,6 +710,13 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       if (picked != null && mounted) {
                         setState(() {
                           selectedTime = picked;
+                          _timeError = null;
+                        });
+                      }
+
+                      if (picked != null && mounted) {
+                        setState(() {
+                          selectedTime = picked;
                           _timeError = null; // ✅ limpia error rojo
                         });
                       }
@@ -797,201 +818,234 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: saving
-                    ? null
-                    : () async {
-                        _unfocus(); // ✅ antes de validar/guardar
-                        final ok = _formKey.currentState?.validate() == true;
-                        if (!ok) return;
+                  ? null
+                  : () async {
+                      _unfocus(); // ✅ antes de validar/guardar
+                      final ok = _formKey.currentState?.validate() == true;
+                      if (!ok) return;
 
-                        if (selectedTime == null) {
-                          setState(() {
-                            _timeError = s.timeRequired; // ✅ texto rojo dentro del dialog
-                          });
-                          _pulseTime(); // ✅ ya lo tienes, ayuda a llamar la atención
-                          return;
-                        }
+                      if (selectedTime == null) {
+                        setState(() {
+                          _timeError = s.timeRequired; // ✅ texto rojo dentro del dialog
+                        });
+                        _pulseTime(); // ✅ ya lo tienes, ayuda a llamar la atención
+                        return;
+                      }
 
-                        if (selectedServiceId == null || selectedServiceData == null) {
+                      if (selectedServiceId == null || selectedServiceData == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(s.procedureRequired)),
+                        );
+                        return;
+                      }
+
+                      if (_hasLoadedTypes() && (selectedType == null || selectedTypeId.isEmpty)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(s.typeRequired)),
+                        );
+                        return;
+                      }
+
+                      if (existingClientMode) {
+                        if (selectedClientData == null || selectedClientId.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.procedureRequired)),
+                            SnackBar(content: Text(s.selectExistingClient)),
                           );
                           return;
                         }
+                      } else {
+                        final country = _parseInt(countryCtrl.text);
+                        final phone = _parseInt(phoneCtrl.text);
+                        final ig = widget.clientService.normalizeInstagram(instagramCtrl.text);
 
-                        if (_hasLoadedTypes() && (selectedType == null || selectedTypeId.isEmpty)) {
+                        final hasPhone = country > 0 && phone > 0;
+                        if (!hasPhone && ig.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.typeRequired)),
+                            SnackBar(content: Text(s.phoneOrInstagramRequired)),
                           );
                           return;
                         }
+                      }
+
+                      setState(() => saving = true);
+
+                      try {
+                        // ✅ construir dt + snap PRO (:00 / :30) SOLO si viene de Week
+                        final isFromWeek = widget.initialStartTime != null;
+
+                        int h = selectedTime!.hour;
+                        int m = selectedTime!.minute;
+
+                        if (isFromWeek) {
+                          if (m < 15) {
+                            m = 0;
+                          } else if (m < 45) {
+                            m = 30;
+                          } else {
+                            // 45-59 => siguiente hora en :00
+                            m = 0;
+                            h = h + 1;
+                          }
+                        }
+
+                        DateTime dt = DateTime(
+                          widget.selectedDay.year,
+                          widget.selectedDay.month,
+                          widget.selectedDay.day,
+                          h,
+                          m,
+                        );
+
+                        // ✅ si al subir hora nos pasamos al día siguiente, capamos a "última hora del día"
+                        // (evita bugs raros al tocar cerca del final del día)
+                        final day0 = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day);
+                        if (dt.isBefore(day0) || !_isSameDay(dt, day0)) {
+                          dt = DateTime(day0.year, day0.month, day0.day, 23, 59);
+                        }
+
+                        final userProv = context.read<UserProvider>();
+                        final workerId = userProv.workerIdForCreate(); // ✅ el worker con el que se crea
+                        final createdByUid = userProv.user?.uid ?? '';
+
+                        final durationMin = _finalMinutesSmart(selectedServiceData, selectedType);
+                        final basePrice = _finalPriceSmart(selectedServiceData, selectedType);
+
+                        final maxOverlap = await widget.conflictService.maxOverlapForCandidate(
+                          day: widget.selectedDay,
+                          candidateStart: dt,
+                          candidateDurationMin: durationMin,
+                          workerId: workerId,
+                          excludeAppointmentId: null,
+                        );
+
+                        final canSave = await widget.conflictService.confirmSaveIfConflict(
+                          context: context,
+                          maxOverlapMin: maxOverlap,
+                          amberThresholdMin: 30,
+                        );
+
+                        if (!canSave) {
+                          if (mounted) setState(() => saving = false);
+                          return;
+                        }
+
+                        // ✅ client resolve
+                        late String clientId;
+                        late String clientName;
+                        late int clientCountry;
+                        late int clientPhone;
+                        late String clientInstagram;
 
                         if (existingClientMode) {
-                          if (selectedClientData == null || selectedClientId.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(s.selectExistingClient)),
-                            );
-                            return;
-                          }
+                          final d = selectedClientData!;
+                          clientId = selectedClientId;
+
+                          final fn = (d['firstName'] ?? '').toString();
+                          final ln = (d['lastName'] ?? '').toString();
+                          clientName = "$fn $ln".trim();
+
+                          clientCountry = (d['country'] is num) ? (d['country'] as num).toInt() : 0;
+                          clientPhone = (d['phone'] is num) ? (d['phone'] as num).toInt() : 0;
+                          clientInstagram = (d['instagram'] ?? '').toString();
                         } else {
-                          final country = _parseInt(countryCtrl.text);
-                          final phone = _parseInt(phoneCtrl.text);
-                          final ig = widget.clientService.normalizeInstagram(instagramCtrl.text);
-
-                          final hasPhone = country > 0 && phone > 0;
-                          if (!hasPhone && ig.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(s.phoneOrInstagramRequired)),
-                            );
-                            return;
-                          }
-                        }
-
-                        setState(() => saving = true);
-
-                        try {
-                          final dt = DateTime(
-                            widget.selectedDay.year,
-                            widget.selectedDay.month,
-                            widget.selectedDay.day,
-                            selectedTime!.hour,
-                            selectedTime!.minute,
-                          );
-
-                          final durationMin = _finalMinutesSmart(selectedServiceData, selectedType);
-                          final basePrice = _finalPriceSmart(selectedServiceData, selectedType);
-
-                          final maxOverlap = await widget.conflictService.maxOverlapForCandidate(
-                            day: widget.selectedDay,
-                            candidateStart: dt,
-                            candidateDurationMin: durationMin,
-                            excludeAppointmentId: null,
-                          );
-
-                          final canSave = await widget.conflictService.confirmSaveIfConflict(
+                          final res = await widget.clientService.createOrGetClient(
                             context: context,
-                            maxOverlapMin: maxOverlap,
-                            amberThresholdMin: 30,
+                            firstName: firstNameCtrl.text.trim(),
+                            lastName: lastNameCtrl.text.trim(),
+                            country: _parseInt(countryCtrl.text),
+                            phone: _parseInt(phoneCtrl.text),
+                            instagramRaw: instagramCtrl.text,
                           );
 
-                          if (!canSave) {
-                            if (mounted) setState(() => saving = false);
-                            return;
-                          }
-
-                          // ✅ client resolve
-                          late String clientId;
-                          late String clientName;
-                          late int clientCountry;
-                          late int clientPhone;
-                          late String clientInstagram;
-
-                          if (existingClientMode) {
-                            final d = selectedClientData!;
-                            clientId = selectedClientId;
-
-                            final fn = (d['firstName'] ?? '').toString();
-                            final ln = (d['lastName'] ?? '').toString();
-                            clientName = "$fn $ln".trim();
-
-                            clientCountry = (d['country'] is num) ? (d['country'] as num).toInt() : 0;
-                            clientPhone = (d['phone'] is num) ? (d['phone'] as num).toInt() : 0;
-                            clientInstagram = (d['instagram'] ?? '').toString();
-                          } else {
-                            final res = await widget.clientService.createOrGetClient(
-                              context: context,
-                              firstName: firstNameCtrl.text.trim(),
-                              lastName: lastNameCtrl.text.trim(),
-                              country: _parseInt(countryCtrl.text),
-                              phone: _parseInt(phoneCtrl.text),
-                              instagramRaw: instagramCtrl.text,
-                            );
-
-                            clientId = res.clientId;
-                            clientName = res.fullName;
-                            clientCountry = res.country;
-                            clientPhone = res.phone;
-                            clientInstagram = res.instagram;
-                          }
-
-                          final svcNameKey = (selectedServiceData?['name'] ?? '').toString();
-                          final translatedName =
-                              svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : 'Service';
-
-                          final typeLabel = (selectedType?['label'] ?? '').toString();
-                          final typeExtraPrice = (selectedType?['extraPrice'] is num)
-                              ? (selectedType!['extraPrice'] as num).toDouble()
-                              : 0.0;
-
-                          final db = FirebaseFirestore.instance;
-                            final baseId = BookingRequestUtils.appointmentBaseId(
-                              clientName: clientName,
-                              date: dt,
-                              serviceName: translatedName, // o svcNameKey si prefieres
-                            );
-
-                            final apptRef = await BookingRequestUtils.uniqueAppointmentRef(
-                              db: db,
-                              baseId: baseId,
-                            );
-
-                            await apptRef.set({
-                              'clientId': clientId,
-                              'clientName': clientName,
-                              'clientCountry': clientCountry,
-                              'clientPhone': clientPhone,
-                              'clientInstagram': clientInstagram,
-
-                              'serviceId': selectedServiceId,
-                              'serviceNameKey': svcNameKey,
-                              'serviceName': translatedName,
-
-                              'typeId': selectedTypeId,
-                              'typeKey': selectedTypeKey,
-                              'typeLabel': typeLabel,
-                              'typeExtraPrice': typeExtraPrice,
-
-                              'durationMin': durationMin,
-                              'basePrice': basePrice,
-                              'total': basePrice,
-
-                              'status': 'scheduled',
-                              'appointmentDate': Timestamp.fromDate(dt),
-
-                              'createdAt': FieldValue.serverTimestamp(),
-                              'updatedAt': FieldValue.serverTimestamp(),
-                            });
-
-                            // ✅ sube stats bien (nested map)
-                            await _apptService.onAppointmentCreated(
-                              appointmentId: apptRef.id,
-                              clientId: clientId,
-                              initialStatus: 'scheduled',
-                              appointmentDate: dt,
-                              lastSummary: translatedName,
-                            );
-
-                          if (!mounted) return;
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.appointmentCreated)),
-                          );
-                        } catch (e) {
-                          if (_isDuplicateNameCancel(e)) {
-                            if (!mounted) return;
-                            setState(() {
-                              existingClientMode = false;
-                            });
-                            return;
-                          }
-
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.errorWithValue(e.toString()))),
-                          );
-                        } finally {
-                          if (mounted) setState(() => saving = false);
+                          clientId = res.clientId;
+                          clientName = res.fullName;
+                          clientCountry = res.country;
+                          clientPhone = res.phone;
+                          clientInstagram = res.instagram;
                         }
-                      },
+
+                        final svcNameKey = (selectedServiceData?['name'] ?? '').toString();
+                        final translatedName =
+                            svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : 'Service';
+
+                        final typeLabel = (selectedType?['label'] ?? '').toString();
+                        final typeExtraPrice = (selectedType?['extraPrice'] is num)
+                            ? (selectedType!['extraPrice'] as num).toDouble()
+                            : 0.0;
+
+                        final db = FirebaseFirestore.instance;
+                        final baseId = BookingRequestUtils.appointmentBaseId(
+                          clientName: clientName,
+                          date: dt,
+                          serviceName: translatedName, // o svcNameKey si prefieres
+                        );
+
+                        final apptRef = await BookingRequestUtils.uniqueAppointmentRef(
+                          db: db,
+                          baseId: baseId,
+                        );
+
+                        await apptRef.set({
+                          'clientId': clientId,
+                          'clientName': clientName,
+                          'clientCountry': clientCountry,
+                          'clientPhone': clientPhone,
+                          'clientInstagram': clientInstagram,
+
+                          'serviceId': selectedServiceId,
+                          'serviceNameKey': svcNameKey,
+                          'serviceName': translatedName,
+
+                          'typeId': selectedTypeId,
+                          'typeKey': selectedTypeKey,
+                          'typeLabel': typeLabel,
+                          'typeExtraPrice': typeExtraPrice,
+
+                          'durationMin': durationMin,
+                          'basePrice': basePrice,
+                          'total': basePrice,
+
+                          'status': 'scheduled',
+                          'appointmentDate': Timestamp.fromDate(dt),
+
+                          'workerId': workerId,
+                          'createdByUid': createdByUid,
+
+                          'createdAt': FieldValue.serverTimestamp(),
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+
+                        // ✅ sube stats bien (nested map)
+                        await _apptService.onAppointmentCreated(
+                          appointmentId: apptRef.id,
+                          clientId: clientId,
+                          initialStatus: 'scheduled',
+                          appointmentDate: dt,
+                          lastSummary: translatedName,
+                        );
+
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(s.appointmentCreated)),
+                        );
+                      } catch (e) {
+                        if (_isDuplicateNameCancel(e)) {
+                          if (!mounted) return;
+                          setState(() {
+                            existingClientMode = false;
+                          });
+                          return;
+                        }
+
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(s.errorWithValue(e.toString()))),
+                        );
+                      } finally {
+                        if (mounted) setState(() => saving = false);
+                      }
+                    },
                 child: saving
                     ? const SizedBox(
                         width: 18,

@@ -1,5 +1,4 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 
@@ -12,6 +11,8 @@ import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/provider/locale_provider.dart';
 import 'package:salon_app/provider/admin_mode_provider.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/provider/booking_view_provider.dart';
+
 import 'package:salon_app/screens/introduction/spalsh_screen.dart';
 
 Future<void> main() async {
@@ -50,6 +51,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<AdminNavProvider>(
           create: (_) => AdminNavProvider(),
+        ),
+        ChangeNotifierProvider<BookingViewProvider>(
+          create: (_) => BookingViewProvider(),
         ),
       ],
       child: Consumer<LocaleProvider>(
