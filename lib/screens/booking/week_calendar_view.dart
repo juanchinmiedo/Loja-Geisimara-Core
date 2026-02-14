@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:salon_app/utils/date_labels.dart';
+
 typedef TapAppt = void Function(String id, Map<String, dynamic> data);
 typedef TapEmpty = void Function(DateTime day, TimeOfDay tod);
 typedef WeekChanged = void Function(DateTime newWeekStartMonday);
@@ -42,8 +44,6 @@ class WeekCalendarView extends StatefulWidget {
 }
 
 class _WeekCalendarViewState extends State<WeekCalendarView> {
-  // 🔥 Toggle rápido para depurar flujo sin romper UX
-  static const bool kFlowDebug = false;
 
   late final PageController _page;
   late DateTime _anchorWeekStartMonday;
@@ -493,12 +493,14 @@ class _WeekHeaderRow extends StatelessWidget {
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final monthLabel = _monthName(weekStartMonday.month);
+    final monthLabel = months(weekStartMonday.month);
     final yearLabel = weekStartMonday.year.toString();
 
     return Row(
@@ -540,15 +542,27 @@ class _WeekHeaderRow extends StatelessWidget {
         Expanded(
           child: Row(
             children: List.generate(7, (i) {
-              final d = weekStartMonday.add(Duration(days: i));
+              final d = _dayOnly(weekStartMonday.add(Duration(days: i)));
               final isToday = _sameDay(d, today);
-              final isSelected = _sameDay(d, selectedDay);
+
+              final isPast = d.isBefore(today);
+
+              // ✅ no permitimos "selected" en pasado
+              final isSelected = !isPast && _sameDay(d, selectedDay);
 
               return Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  // onTapDown para que no lo “cancele” el PageView
-                  onTapDown: (_) => onSelectDay(DateTime(d.year, d.month, d.day)),
+
+                  // ✅ si es pasado → manda a hoy
+                  onTapDown: (_) {
+                    if (isPast) {
+                      onSelectDay(today);
+                    } else {
+                      onSelectDay(d);
+                    }
+                  },
+
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     alignment: Alignment.center,
@@ -556,10 +570,10 @@ class _WeekHeaderRow extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          const ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][i],
+                          week(d.weekday),
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.grey[700],
+                            color: isPast ? Colors.grey[400] : Colors.grey[700],
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -583,9 +597,11 @@ class _WeekHeaderRow extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
-                              color: isToday
-                                  ? const Color(0xff721c80)
-                                  : const Color.fromARGB(255, 35, 35, 35),
+                              color: isPast
+                                  ? Colors.grey[400]
+                                  : (isToday
+                                      ? const Color(0xff721c80)
+                                      : const Color.fromARGB(255, 35, 35, 35)),
                             ),
                           ),
                         ),
@@ -599,12 +615,6 @@ class _WeekHeaderRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _monthName(int m) {
-    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    if (m < 1 || m > 12) return '';
-    return names[m - 1];
   }
 }
 
@@ -715,8 +725,8 @@ class _ApptBlock extends StatelessWidget {
   });
 
   final Color color;
-  final String title;
-  final String subtitle;
+  final String title;     // procedimiento (service)
+  final String subtitle;  // cliente
   final VoidCallback onTap;
 
   @override
@@ -726,6 +736,110 @@ class _ApptBlock extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final h = c.maxHeight;
+
+        // umbrales
+        final bool compact45 = h < 44; // ~45m o menos
+        final bool compact30 = h < 34; // ~30m o menos
+        final bool compact15 = h < 24; // ~15m o menos
+
+        // texto preferido: cliente (si existe) para 15/30
+        final client = subtitle.trim();
+        final service = title.trim();
+        final clientOrService = client.isNotEmpty ? client : service;
+
+        // helper opcional: primer nombre
+        String firstWord(String s) {
+          final t = s.trim();
+          if (t.isEmpty) return '';
+          final idx = t.indexOf(' ');
+          return idx == -1 ? t : t.substring(0, idx);
+        }
+
+        // ---------- 15m: cliente (primer nombre) 1 línea ----------
+        if (compact15) {
+          final t = client.isNotEmpty ? firstWord(client) : service;
+          return _OneLineMiniBlock(
+            color: color,
+            text: t,
+            fontSize: 8.2,
+            onTap: onTap,
+          );
+        }
+
+        // ---------- 30m: cliente 1 línea (como 15 pero un pelín mayor) ----------
+        if (compact30) {
+          // aquí SI dejamos nombre completo con ellipsis (queda mejor)
+          return _OneLineMiniBlock(
+            color: color,
+            text: clientOrService,
+            fontSize: 9.0,
+            onTap: onTap,
+          );
+        }
+
+        // ---------- 45m: procedimiento + cliente, responsive (solo baja si hace falta) ----------
+        if (compact45) {
+          final showClient = client.isNotEmpty;
+
+          // tamaños máximos (como te gusta) y mínimos por si aprieta
+          final double titleMax = 9.8;
+          final double subMax = 8.8;
+
+          // si está muy cerca del límite, bajamos un poco
+          // (esto evita overflow sin “encoger” de más)
+          final double titleSize = (h < 38) ? 9.2 : titleMax;
+          final double subSize = (h < 38) ? 8.4 : subMax;
+
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ✅ procedimiento
+                    Text(
+                      service,
+                      maxLines: 1, // 45m: mejor 1 línea para asegurar
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05,
+                      ),
+                    ),
+                    if (showClient) ...[
+                      const SizedBox(height: 2),
+                      // ✅ cliente
+                      Text(
+                        client,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: subSize,
+                          fontWeight: FontWeight.w700,
+                          height: 1.05,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // ---------- NORMAL (≥ 1h): NO TOCAR ----------
         final showSubtitle = subtitle.isNotEmpty && h >= 42;
 
         return Material(
@@ -775,6 +889,51 @@ class _ApptBlock extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Bloque mini 1 línea (15m y 30m)
+class _OneLineMiniBlock extends StatelessWidget {
+  const _OneLineMiniBlock({
+    required this.color,
+    required this.text,
+    required this.fontSize,
+    required this.onTap,
+  });
+
+  final Color color;
+  final String text;
+  final double fontSize;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

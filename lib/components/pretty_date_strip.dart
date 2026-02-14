@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/utils/date_labels.dart';
 
 class PrettyDateStrip extends StatefulWidget {
   final DateTime selectedDate;
@@ -23,7 +24,7 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
   final ScrollController _sc = ScrollController();
 
   static const double _itemW = 56;
-  static const double _itemH = 70;
+  static const double _itemH = 66;
   static const double _gap = 8;
   static const double _padX = 12;
 
@@ -109,12 +110,12 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
   @override
   Widget build(BuildContext context) {
     final isAtToday = _same(_sel, _today);
-    final monthLabel = _month3(_sel.month);
+    final monthLabel = months(_sel.month);
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.only(top: 14, left: 4, right: 4, bottom: 8),
+          padding: const EdgeInsets.only(top: 14, left: 4, right: 4, bottom: 18),
           child: Row(
             children: [
               GestureDetector(
@@ -146,8 +147,8 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
               final d = _today.add(Duration(days: idx));
               final selected = _same(d, _sel);
 
-              final mon = _month3(d.month);   // MES arriba
-              final dow = _dow3(d.weekday);   // DOW abajo
+              final mon = months(d.month);   // MES arriba
+              final dow = week(d.weekday);   // DOW abajo
 
               // ✅ no seleccionado: sin borde (solo fondo leve)
               final bg = selected ? Colors.white : Colors.transparent;
@@ -244,7 +245,4 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
       ],
     );
   }
-
-  String _month3(int m) => const ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][m - 1];
-  String _dow3(int wd) => const ["MON","TUE","WED","THU","FRI","SAT","SUN"][wd - 1];
 }

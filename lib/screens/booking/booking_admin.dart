@@ -395,6 +395,11 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       onTapEmpty: (day, tod) async {
         if (!canCreate) return;
 
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final dd = DateTime(day.year, day.month, day.day);
+        if (dd.isBefore(today)) return; // ✅ por si acaso
+
         await _openCreateAppointmentDialog(
           preselectedClientId: widget.preselectedClientId,
           initialStartTime: tod,
