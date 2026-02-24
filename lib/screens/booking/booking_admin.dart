@@ -17,6 +17,7 @@ import 'package:salon_app/widgets/booking_view_toggle.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/services/conflict_service.dart';
 
+import 'package:salon_app/screens/booking/past_appointment_dialog.dart';
 import 'package:salon_app/screens/booking/create_appointment_dialog.dart';
 import 'package:salon_app/screens/booking/edit_appointment_dialog.dart';
 import 'package:salon_app/screens/booking/week_calendar_view.dart';
@@ -208,6 +209,23 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       );
     }
 
+    Future<void> _openPastAppointmentDialog({
+      required String appointmentId,
+      required Map<String, dynamic> data,
+      required DateTime selectedDayOverride,
+    }) async {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PastAppointmentDialog(
+          appointmentId: appointmentId,
+          data: data,
+          selectedDay: selectedDayOverride,
+          services: _services, // ✅ tu cache real
+        ),
+      );
+    }
+
     // ───────────────── Build ─────────────────
 
     @override
@@ -379,17 +397,27 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         setState(() => _selectedDay = DateTime(day.year, day.month, day.day));
       },
 
-      onTapAppointment: (id, data) {
+      onTapAppointment: (id, data) async {
         final ts = data['appointmentDate'];
-        if (ts is Timestamp) {
-          final d = ts.toDate();
-          final dayOnly = DateTime(d.year, d.month, d.day);
+        final dt = (ts is Timestamp) ? ts.toDate() : null;
 
-          // ✅ fija el selectedDay al día del appointment (y por tanto la semana visible)
-          setState(() => _selectedDay = dayOnly);
+        DateTime dayOnly = _selectedDay;
+        if (dt != null) {
+          dayOnly = DateTime(dt.year, dt.month, dt.day);
+          setState(() => _selectedDay = dayOnly); // ✅ mantiene la semana bien
         }
 
-        _openEditAppointmentDialog(appointmentId: id, data: data);
+        // ✅ pasado vs futuro
+        if (dt != null && dt.isBefore(DateTime.now())) {
+          await _openPastAppointmentDialog(
+            appointmentId: id,
+            data: data,
+            selectedDayOverride: dayOnly,
+          );
+          return;
+        }
+
+        await _openEditAppointmentDialog(appointmentId: id, data: data);
       },
 
       onTapEmpty: (day, tod) async {
@@ -398,12 +426,20 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final dd = DateTime(day.year, day.month, day.day);
-        if (dd.isBefore(today)) return; // ✅ por si acaso
+
+        // ✅ no permitir crear en días pasados
+        if (dd.isBefore(today)) return;
+
+        // ✅ si es HOY, no permitir crear en horas pasadas
+        if (dd.isAtSameMomentAs(today)) {
+          final slot = DateTime(day.year, day.month, day.day, tod.hour, tod.minute);
+          if (slot.isBefore(now)) return;
+        }
 
         await _openCreateAppointmentDialog(
           preselectedClientId: widget.preselectedClientId,
           initialStartTime: tod,
-          selectedDayOverride: day, // ✅ para crear en el día tocado sin tocar datepicker
+          selectedDayOverride: day,
         );
       },
     );
@@ -500,10 +536,27 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             return _AdminAppointmentTile(
               doc: vm.doc,
               dotColor: vm.dotColor ?? Colors.green,
-              onTap: () => _openEditAppointmentDialog(
-                appointmentId: vm.id,
-                data: vm.data,
-              ),
+              onTap: () async {
+                final ts = vm.data['appointmentDate'];
+                final dt = (ts is Timestamp) ? ts.toDate() : null;
+
+                if (dt != null && dt.isBefore(DateTime.now())) {
+                  final dayOnly = DateTime(dt.year, dt.month, dt.day);
+                  setState(() => _selectedDay = dayOnly);
+
+                  await _openPastAppointmentDialog(
+                    appointmentId: vm.id,
+                    data: vm.data,
+                    selectedDayOverride: dayOnly,
+                  );
+                  return;
+                }
+
+                await _openEditAppointmentDialog(
+                  appointmentId: vm.id,
+                  data: vm.data,
+                );
+              },
             );
           }).toList(),
         );
