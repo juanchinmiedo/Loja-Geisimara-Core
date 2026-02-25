@@ -398,18 +398,6 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
     final width = MediaQuery.of(context).size.width;
     final maxDialogWidth = (width * 0.92).clamp(280.0, 440.0);
 
-    // Usamos label igual que edit (aunque luego NO mostramos la fila inferior)
-    final svcNameKey =
-        (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '')
-            .toString();
-    final svcLabel = svcNameKey.isNotEmpty
-        ? trServiceOrAddon(context, svcNameKey)
-        : (widget.data['serviceName'] ?? s.serviceFallback).toString();
-
-    // se mantiene por si quieres usarlo luego, pero NO lo mostramos abajo
-    final price = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
-    final minutes = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
-
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 10),

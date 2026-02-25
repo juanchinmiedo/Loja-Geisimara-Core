@@ -192,14 +192,14 @@ class BookingRequestRepo {
     for (final s in days) {
       final d = BookingRequestUtils.parseYyyymmdd(s);
       if (d == null) continue;
-      latest = (latest == null || d.isAfter(latest!)) ? d : latest;
+      latest = (latest == null || d.isAfter(latest)) ? d : latest;
     }
 
     final slots = (br['exactSlots'] as List?) ?? const [];
     for (final x in slots) {
       if (x is Timestamp) {
         final dt = x.toDate();
-        latest = (latest == null || dt.isAfter(latest!)) ? dt : latest;
+        latest = (latest == null || dt.isAfter(latest)) ? dt : latest;
       }
     }
 

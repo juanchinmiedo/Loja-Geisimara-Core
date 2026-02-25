@@ -659,60 +659,6 @@ class _LanguageSelector extends StatelessWidget {
   }
 }
 
-class _EmptyServicesPlaceholder extends StatelessWidget {
-  const _EmptyServicesPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      {'icon': Icons.cut, 'label': 'Services'},
-      {'icon': Icons.brush, 'label': 'Care'},
-      {'icon': Icons.star, 'label': 'Best'},
-    ];
-    return SizedBox(
-      height: 100,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(width: 18),
-        itemBuilder: (context, i) {
-          return Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(bottom: 18),
-                height: 50,
-                width: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(50),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.grey,
-                      blurRadius: 10.0,
-                      spreadRadius: 0.5,
-                      offset: Offset(3, 3),
-                    )
-                  ],
-                ),
-                child: Icon(
-                  items[i]['icon'] as IconData,
-                  color: const Color(0xff721c80),
-                ),
-              ),
-              Text(
-                items[i]['label'] as String,
-                style: const TextStyle(color: Colors.deepPurple),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _HomeProfileAvatar extends StatelessWidget {
   const _HomeProfileAvatar();
 

@@ -2,9 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:salon_app/services/client_service.dart';
-
 import 'package:salon_app/generated/l10n.dart';
+
 import 'package:salon_app/provider/admin_nav_provider.dart';
 
 import 'package:salon_app/components/ui/app_gradient_header.dart';
@@ -12,11 +11,16 @@ import 'package:salon_app/components/ui/app_pill.dart';
 import 'package:salon_app/components/ui/app_preview_card.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/client_card.dart';
-import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 
+import 'package:salon_app/widgets/booking_request_card.dart';
+import 'package:salon_app/widgets/booking_request_create_form.dart';
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
+
 import 'package:salon_app/repositories/booking_request_repo.dart';
+
 import 'package:salon_app/utils/booking_request_utils.dart';
+
+import 'package:salon_app/services/client_service.dart';
 
 class ClientsAdminScreen extends StatefulWidget {
   const ClientsAdminScreen({super.key});
@@ -238,7 +242,9 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   _PanelOpen? _openPanel;
   bool _openAddRequest = false;
 
-  final notesCtrl = TextEditingController();
+  String _notesDraft = '';
+  int _notesResetToken = 0;
+  String? _selectedWorkerId; // null => Any
   DateTime? preferredDay;
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
@@ -301,7 +307,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     countryCtrl.dispose();
     phoneCtrl.dispose();
     igCtrl.dispose();
-    notesCtrl.dispose();
     super.dispose();
   }
 
@@ -379,11 +384,12 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     }
 
     await brRepo.upsertRequest(
+      workerId: _selectedWorkerId,
       clientId: widget.clientId,
       exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
-      notes: notesCtrl.text.trim(),
+      notes: _notesDraft.trim(),
     );
 
     await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
@@ -395,57 +401,69 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     setState(() {
       _looking = true;
       _openAddRequest = false;
-      notesCtrl.clear();
+      _notesDraft = '';
+      _notesResetToken++;
       preferredDay = null;
       rangeStart = null;
       rangeEnd = null;
+      _selectedWorkerId = null;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking request created")));
   }
 
   Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
-    final editNotes = TextEditingController(text: (data['notes'] ?? '').toString());
+    String draft = (data['notes'] ?? '').toString();
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Edit request"),
-        content: TextField(
-          controller: editNotes,
-          minLines: 1,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: "Notes",
-            border: OutlineInputBorder(),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text("Edit request"),
+            content: TextFormField(
+              initialValue: draft,
+              minLines: 1,
+              maxLines: 4,
+              onChanged: (v) => setLocal(() => draft = v),
+              decoration: const InputDecoration(
+                labelText: "Notes",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  FocusScope.of(ctx).unfocus();
+                  Navigator.pop(ctx, false);
+                },
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: kPurple),
+                onPressed: () {
+                  FocusScope.of(ctx).unfocus();
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text("Save", style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: kPurple),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Save", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (ok == true) {
-      await brRepo.updateRequestNotes(requestId: requestId, notes: editNotes.text.trim());
+      await brRepo.updateRequestNotes(
+        requestId: requestId,
+        notes: draft.trim(),
+      );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Request updated")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Request updated")),
+        );
       }
     }
-
-    editNotes.dispose();
-  }
-
-  String _formatRange(Map<String, dynamic> r) {
-    final s = (r['startMin'] as num?)?.toInt() ?? 0;
-    final e = (r['endMin'] as num?)?.toInt() ?? 0;
-    String hm(int m) => "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
-    return "${hm(s)} - ${hm(e)}";
   }
 
   Widget _panelHeader({required String title, required bool open, required VoidCallback onTap}) {
@@ -475,90 +493,32 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     required String requestId,
     required Map<String, dynamic> br,
   }) {
-    final days = (br['preferredDays'] as List?) ?? const [];
-    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-    final notes = (br['notes'] ?? '').toString().trim();
-    final wid = br['workerId'] as String?;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 74),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 6),
-                Text("• Worker: ${wid == null ? 'Any' : wid}"),
-                if (days.isNotEmpty)
-                  Text(
-                    "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
-                  ),
-                if (ranges.isNotEmpty)
-                  Text(
-                    "• Range(s): ${ranges.map((r) {
-                      final m = Map<String, dynamic>.from(r as Map);
-                      return _formatRange(m);
-                    }).join('; ')}",
-                  ),
-                if (notes.isNotEmpty) Text("• Notes: $notes"),
-              ],
-            ),
+    return BookingRequestCard(
+      requestId: requestId,
+      br: br,
+      purple: kPurple,
+      onDelete: () async {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (dctx) => AlertDialog(
+            title: const Text("Delete request?"),
+            content: const Text("This will delete this booking request."),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(dctx, true),
+                child: const Text("Delete", style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: AppIconPillButton(
-              icon: Icons.delete_outline,
-              color: Colors.redAccent,
-              shadow: false,
-              tooltip: "Delete request",
-              onTap: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (dctx) => AlertDialog(
-                    title: const Text("Delete request?"),
-                    content: const Text("This will delete this booking request."),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        onPressed: () => Navigator.pop(dctx, true),
-                        child: const Text("Delete", style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                );
-                if (ok != true) return;
-                await brRepo.deleteRequest(requestId);
-              },
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: AppIconPillButton(
-              icon: Icons.edit_outlined,
-              color: kPurple,
-              shadow: false,
-              tooltip: "Edit notes",
-              onTap: () => _editRequestNotesDialog(requestId, br),
-            ),
-          ),
-        ],
-      ),
+        );
+        if (ok != true) return;
+        await brRepo.deleteRequest(requestId);
+      },
+      onEditNotes: () => _editRequestNotesDialog(requestId, br),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -757,93 +717,20 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
             const SizedBox(height: 10),
             AppSectionCard(
               title: "New request details",
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: notesCtrl,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: "Notes / preferences",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final now = DateTime.now();
-                      final today = DateTime(now.year, now.month, now.day);
-                      final d = await showDatePicker(
-                        context: context,
-                        firstDate: today,
-                        lastDate: DateTime(now.year + 2),
-                        initialDate: preferredDay ?? today,
-                      );
-                      if (d == null) return;
-                      setState(() => preferredDay = d);
-                    },
-                    icon: const Icon(Icons.calendar_month),
-                    label: Text(
-                      preferredDay == null
-                          ? "Pick preferred day (optional)"
-                          : "Day: ${BookingRequestUtils.yyyymmdd(preferredDay!)}",
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            final t = await showTimePicker(
-                              context: context,
-                              initialTime: rangeStart ?? const TimeOfDay(hour: 9, minute: 0),
-                            );
-                            if (t == null) return;
-                            setState(() => rangeStart = t);
-                          },
-                          child: Text(rangeStart == null ? "Start time" : "Start: ${rangeStart!.format(context)}"),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            final t = await showTimePicker(
-                              context: context,
-                              initialTime: rangeEnd ?? const TimeOfDay(hour: 12, minute: 0),
-                            );
-                            if (t == null) return;
-                            setState(() => rangeEnd = t);
-                          },
-                          child: Text(rangeEnd == null ? "End time" : "End: ${rangeEnd!.format(context)}"),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kPurple,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: _createRequest,
-                      icon: const Icon(Icons.add, color: Colors.white),
-                      label: const Text(
-                        "Create request",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                  ),
-                ],
+              child: BookingRequestCreateForm(
+                notesValue: _notesDraft,
+                  onNotesChanged: (v) => setState(() => _notesDraft = v),
+                  notesResetToken: _notesResetToken,
+                  selectedWorkerId: _selectedWorkerId,
+                  onWorkerChanged: (v) => setState(() => _selectedWorkerId = v),
+                  preferredDay: preferredDay,
+                  rangeStart: rangeStart,
+                  rangeEnd: rangeEnd,
+                  onDayChanged: (d) => setState(() => preferredDay = d),
+                  onStartChanged: (t) => setState(() => rangeStart = t),
+                  onEndChanged: (t) => setState(() => rangeEnd = t),
+                  onCreate: _createRequest,
+                  purple: kPurple,
               ),
             ),
           ],

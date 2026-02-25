@@ -250,16 +250,6 @@ class S {
     );
   }
 
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _carrousel_dart {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_carrousel_dart',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `Reservar agora`
   String get bookNowButton {
     return Intl.message(
@@ -290,16 +280,6 @@ class S {
     );
   }
 
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _maps_screen_dart {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_maps_screen_dart',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `Abrir no Google Maps`
   String get openInMaps {
     return Intl.message(
@@ -315,16 +295,6 @@ class S {
     return Intl.message(
       'Não foi possível abrir o Google Maps',
       name: 'openInMapsError',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _onboarding_screenn {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_onboarding_screenn',
       desc: '',
       args: [],
     );
@@ -355,16 +325,6 @@ class S {
     return Intl.message(
       'Começar',
       name: 'start',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _home_screenn {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_home_screenn',
       desc: '',
       args: [],
     );
@@ -687,16 +647,6 @@ class S {
     return Intl.message(
       'Ver perfil e catálogo',
       name: 'viewProfileAndCatalog',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Texts used in create/edit appointment dialogs`
-  String get _booking_admin_dialogs {
-    return Intl.message(
-      'Texts used in create/edit appointment dialogs',
-      name: '_booking_admin_dialogs',
       desc: '',
       args: [],
     );
@@ -1067,16 +1017,6 @@ class S {
     return Intl.message(
       'Serviço',
       name: 'serviceFallback',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Common app strings`
-  String get _app_common {
-    return Intl.message(
-      'Common app strings',
-      name: '_app_common',
       desc: '',
       args: [],
     );

@@ -2,6 +2,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 
+class _NoGlowScrollBehavior extends MaterialScrollBehavior {
+  const _NoGlowScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    // ✅ Elimina el glow blanco de Android
+    return child;
+  }
+}
+
 class WorkerChoicePills extends StatefulWidget {
   const WorkerChoicePills({
     super.key,
@@ -21,39 +35,14 @@ class WorkerChoicePills extends StatefulWidget {
 
 class _WorkerChoicePillsState extends State<WorkerChoicePills> {
   final ScrollController _controller = ScrollController();
-  bool _canLeft = false;
-  bool _canRight = false;
-
   static const Color kPurple = Color(0xff721c80);
+
   String? _lastSelected;
 
   @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_updateFades);
-  }
-
-  @override
   void dispose() {
-    _controller.removeListener(_updateFades);
     _controller.dispose();
     super.dispose();
-  }
-
-  void _updateFades() {
-    if (!_controller.hasClients) return;
-    final max = _controller.position.maxScrollExtent;
-    final off = _controller.offset;
-
-    final left = off > 4;
-    final right = off < max - 4;
-
-    if (left != _canLeft || right != _canRight) {
-      setState(() {
-        _canLeft = left;
-        _canRight = right;
-      });
-    }
   }
 
   void _maybeScrollToStartOnSelectionChange(String? selectedNow) {
@@ -67,7 +56,6 @@ class _WorkerChoicePillsState extends State<WorkerChoicePills> {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
-      _updateFades();
     });
   }
 
@@ -81,7 +69,7 @@ class _WorkerChoicePillsState extends State<WorkerChoicePills> {
       builder: (context, snap) {
         final docs = snap.data?.docs ?? [];
 
-        // seleccionado primero (después de Any)
+        // Seleccionado primero (después de Any)
         QueryDocumentSnapshot<Map<String, dynamic>>? selectedDoc;
         if (selected != null) {
           for (final d in docs) {
@@ -112,48 +100,17 @@ class _WorkerChoicePillsState extends State<WorkerChoicePills> {
           ],
         ];
 
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            SingleChildScrollView(
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(children: pills),
-            ),
-            if (_canLeft)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: IgnorePointer(child: _fade(isLeft: true)),
-              ),
-            if (_canRight)
-              Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: IgnorePointer(child: _fade(isLeft: false)),
-              ),
-          ],
+        // ✅ SIN Stack / SIN fades / SIN sombreado blanco
+        return ScrollConfiguration(
+          behavior: const _NoGlowScrollBehavior(),
+          child: SingleChildScrollView(
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            child: Row(children: pills),
+          ),
         );
       },
-    );
-  }
-
-  Widget _fade({required bool isLeft}) {
-    return Container(
-      width: 18,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: isLeft ? Alignment.centerLeft : Alignment.centerRight,
-          end: isLeft ? Alignment.centerRight : Alignment.centerLeft,
-          colors: [
-            Colors.white.withOpacity(0.75),
-            Colors.white.withOpacity(0.0),
-          ],
-        ),
-      ),
     );
   }
 

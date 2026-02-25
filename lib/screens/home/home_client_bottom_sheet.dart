@@ -4,15 +4,14 @@ import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/admin_nav_provider.dart';
 
+import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_preview_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
-import 'package:salon_app/components/ui/app_icon_pill_button.dart';
-import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 
+import 'package:salon_app/widgets/booking_request_card.dart';
+import 'package:salon_app/widgets/booking_request_create_form.dart';
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
-import 'package:salon_app/widgets/worker_choice_pills.dart';
-import 'package:salon_app/widgets/booking_request_pickers_pills.dart';
 
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
@@ -38,7 +37,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   bool _creatingRequest = false;
 
-  final notesCtrl = TextEditingController();
+  String _notesDraft = '';
+  int _notesResetToken = 0;
   DateTime? preferredDay;
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
@@ -54,12 +54,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
     // ✅ limpieza automática al abrir (expiradas)
     brRepo.pruneExpiredActiveRequests(clientId: widget.clientId);
-  }
-
-  @override
-  void dispose() {
-    notesCtrl.dispose();
-    super.dispose();
   }
 
   String _fullName(Map<String, dynamic> c, String fallback) {
@@ -108,14 +102,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     }
   }
 
-  String _formatRange(Map<String, dynamic> r) {
-    final s = (r['startMin'] as num?)?.toInt() ?? 0;
-    final e = (r['endMin'] as num?)?.toInt() ?? 0;
-    String hm(int m) =>
-        "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
-    return "${hm(s)} - ${hm(e)}";
-  }
-
   Future<void> _createRequest() async {
     final preferredDays = <String>[];
     if (preferredDay != null) {
@@ -129,11 +115,11 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
     await brRepo.upsertRequest(
       clientId: widget.clientId,
-      workerId: _selectedWorkerId, // ✅
+      workerId: _selectedWorkerId,
       exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
-      notes: notesCtrl.text.trim(),
+      notes: _notesDraft.trim(),
     );
 
     await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
@@ -144,7 +130,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (!mounted) return;
     setState(() {
       _creatingRequest = false;
-      notesCtrl.clear();
+      _notesDraft = '';
+      _notesResetToken++; // ✅ limpia el TextFormField
       preferredDay = null;
       rangeStart = null;
       rangeEnd = null;
@@ -211,153 +198,89 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     );
   }
 
-  // ─────────────────────────────
-  // HEIGHT RULES (0/1/2 visible; >2 scroll inside list)
-  // ─────────────────────────────
-  double _sheetHeight({
-    required double screenH,
-    required int requestCount,
-    required bool allowOuterScroll,
-  }) {
-    const base = 468.0;
-    const perItem = 118.0;
+  /// ✅ EDIT NOTES dialog sin controller (evita crash con teclado + cancelar)
+  Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
+    String draft = (data['notes'] ?? '').toString();
 
-    final visible = requestCount <= 0 ? 0 : (requestCount == 1 ? 1 : 2);
-    final raw = base + (visible * perItem);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text("Edit request"),
+            content: TextFormField(
+              initialValue: draft,
+              minLines: 1,
+              maxLines: 4,
+              onChanged: (v) => setLocal(() => draft = v),
+              decoration: const InputDecoration(
+                labelText: "Notes",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  FocusScope.of(ctx).unfocus();
+                  Navigator.pop(ctx, false);
+                },
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: kPurple),
+                onPressed: () {
+                  FocusScope.of(ctx).unfocus();
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text("Save", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
 
-    final minH = allowOuterScroll ? screenH * 0.35 : screenH * 0.42;
-    final maxH = screenH * 0.82;
-
-    return raw.clamp(minH, maxH);
-  }
-
-  double _activeListHeightForCount(int count) {
-    const perItem = 118.0;
-    const paddingAir = 6.0;
-    final visible = count <= 0 ? 0 : (count == 1 ? 1 : 2);
-    return (visible * perItem) + paddingAir;
+    if (ok == true) {
+      await brRepo.updateRequestNotes(
+        requestId: requestId,
+        notes: draft.trim(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Request updated")),
+        );
+      }
+    }
   }
 
   Widget _requestTile({
     required String requestId,
     required Map<String, dynamic> br,
   }) {
-    final days = (br['preferredDays'] as List?) ?? const [];
-    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-    final notes = (br['notes'] ?? '').toString();
-    final wid = br['workerId'] as String?;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 64),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 6),
-                Text("• Worker: ${wid == null ? 'Any' : wid}"),
-                if (days.isNotEmpty)
-                  Text(
-                    "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
-                  ),
-                if (ranges.isNotEmpty)
-                  Text(
-                    "• Range(s): ${ranges.map((r) {
-                      final m = Map<String, dynamic>.from(r as Map);
-                      return _formatRange(m);
-                    }).join('; ')}",
-                  ),
-                if (notes.isNotEmpty) Text("• Notes: $notes"),
-                const SizedBox(height: 18),
-              ],
-            ),
+    return BookingRequestCard(
+      requestId: requestId,
+      br: br,
+      purple: kPurple,
+      onDelete: () async {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (dctx) => AlertDialog(
+            title: const Text("Delete request?"),
+            content: const Text("This will delete this booking request."),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(dctx, true),
+                child: const Text("Delete", style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: AppIconPillButton(
-              icon: Icons.delete_outline,
-              color: Colors.redAccent,
-              shadow: false,
-              tooltip: "Delete request",
-              onTap: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (dctx) => AlertDialog(
-                    title: const Text("Delete request?"),
-                    content: const Text("This will delete this booking request."),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        onPressed: () => Navigator.pop(dctx, true),
-                        child: const Text("Delete", style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                );
-                if (ok != true) return;
-                await brRepo.deleteRequest(requestId);
-              },
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: AppIconPillButton(
-              icon: Icons.edit_outlined,
-              color: kPurple,
-              shadow: false,
-              tooltip: "Edit notes",
-              onTap: () async {
-                final editNotes = TextEditingController(text: notes);
-
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text("Edit request"),
-                    content: TextField(
-                      controller: editNotes,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: "Notes",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: kPurple),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text("Save", style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (ok == true) {
-                  await brRepo.updateRequestNotes(
-                    requestId: requestId,
-                    notes: editNotes.text.trim(),
-                  );
-                }
-
-                editNotes.dispose();
-              },
-            ),
-          ),
-        ],
-      ),
+        );
+        if (ok != true) return;
+        await brRepo.deleteRequest(requestId);
+      },
+      onEditNotes: () => _editRequestNotesDialog(requestId, br), // ✅
     );
   }
 
@@ -367,44 +290,52 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (docs.isEmpty) {
       return AppSectionCard(
         title: "Active booking requests",
-        child: Text("No active booking requests yet.", style: TextStyle(color: Colors.grey[700])),
+        child: Text(
+          "No active booking requests yet.",
+          style: TextStyle(color: Colors.grey[700]),
+        ),
       );
     }
 
     final count = docs.length;
-    final panelH = _activeListHeightForCount(count);
     final mustScrollInside = count > 2;
 
+    if (!mustScrollInside) {
+      return AppSectionCard(
+        title: "Active booking requests",
+        child: Column(
+          children: [
+            for (int i = 0; i < docs.length && i < 2; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _requestTile(
+                requestId: docs[i].id,
+                br: docs[i].data(),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    const double maxPanelH = 280;
     return AppSectionCard(
       title: "Active booking requests",
       child: SizedBox(
-        height: panelH,
-        child: mustScrollInside
-            ? ListView.separated(
-                key: PageStorageKey("home_active_requests_${widget.clientId}"),
-                padding: const EdgeInsets.only(top: 3, bottom: 3),
-                physics: const ClampingScrollPhysics(),
-                itemCount: docs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, i) {
-                  final d = docs[i];
-                  return _requestTile(
-                    requestId: d.id,
-                    br: d.data(),
-                  );
-                },
-              )
-            : Column(
-                children: [
-                  for (int i = 0; i < docs.length && i < 2; i++) ...[
-                    if (i > 0) const SizedBox(height: 10),
-                    _requestTile(
-                      requestId: docs[i].id,
-                      br: docs[i].data(),
-                    ),
-                  ],
-                ],
-              ),
+        height: maxPanelH,
+        child: ListView.separated(
+          key: PageStorageKey("home_active_requests_${widget.clientId}"),
+          padding: const EdgeInsets.only(top: 3, bottom: 3),
+          physics: const ClampingScrollPhysics(),
+          itemCount: docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, i) {
+            final d = docs[i];
+            return _requestTile(
+              requestId: d.id,
+              br: d.data(),
+            );
+          },
+        ),
       ),
     );
   }
@@ -446,7 +377,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
           ),
         ),
         const SizedBox(height: 12),
-
         Row(
           children: [
             Expanded(child: _openInClientsButton()),
@@ -467,68 +397,27 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
             ),
           ],
         ),
-
         if (_creatingRequest) ...[
           const SizedBox(height: 12),
           AppSectionCard(
             title: "New request details",
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: notesCtrl,
-                  minLines: 1,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: "Notes / preferences",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ✅ Worker pills (Any / worker específico)
-                const Text("Worker", style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 8),
-                WorkerChoicePills(
-                  value: _selectedWorkerId,
-                  onChanged: (v) => setState(() => _selectedWorkerId = v),
-                  anyLabel: "Any",
-                ),
-
-                const SizedBox(height: 12),
-
-                // ✅ Pickers pills (día/start/end)
-                BookingRequestPickersPills(
-                  preferredDay: preferredDay,
-                  rangeStart: rangeStart,
-                  rangeEnd: rangeEnd,
-                  onDayChanged: (d) => setState(() => preferredDay = d),
-                  onStartChanged: (t) => setState(() => rangeStart = t),
-                  onEndChanged: (t) => setState(() => rangeEnd = t),
-                  purple: kPurple,
-                ),
-
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPurple,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: _createRequest,
-                    icon: const Icon(Icons.check, color: Colors.white),
-                    label: const Text(
-                      "Create request",
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ),
-              ],
+            child: BookingRequestCreateForm(
+              notesValue: _notesDraft,
+              onNotesChanged: (v) => setState(() => _notesDraft = v),
+              notesResetToken: _notesResetToken,
+              selectedWorkerId: _selectedWorkerId,
+              onWorkerChanged: (v) => setState(() => _selectedWorkerId = v),
+              preferredDay: preferredDay,
+              rangeStart: rangeStart,
+              rangeEnd: rangeEnd,
+              onDayChanged: (d) => setState(() => preferredDay = d),
+              onStartChanged: (t) => setState(() => rangeStart = t),
+              onEndChanged: (t) => setState(() => rangeEnd = t),
+              onCreate: _createRequest,
+              purple: kPurple,
             ),
           ),
         ],
-
         const SizedBox(height: 12),
         _activeRequestsSection(docs: activeRequestDocs),
       ],
@@ -638,18 +527,13 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
             final activeDocs = wantsRequests
                 ? (reqSnap.data ?? const [])
                 : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-            final requestCount = wantsRequests ? activeDocs.length : 0;
-
             final screenH = MediaQuery.of(context).size.height;
 
             final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
             final allowOuterScroll = _creatingRequest || keyboardOpen || screenH < 640;
 
-            final targetH = _sheetHeight(
-              screenH: screenH,
-              requestCount: requestCount,
-              allowOuterScroll: allowOuterScroll,
-            );
+            final targetH =
+                (keyboardOpen ? screenH * 0.90 : screenH * 0.82).clamp(screenH * 0.42, screenH * 0.90);
 
             return SafeArea(
               top: false,
