@@ -23,6 +23,16 @@ class BookingRequestUtils {
     return "$y$m$d";
   }
 
+  static DateTime? parseYyyymmdd(String s) {
+    final clean = s.trim();
+    if (clean.length != 8) return null;
+    final y = int.tryParse(clean.substring(0, 4));
+    final m = int.tryParse(clean.substring(4, 6));
+    final d = int.tryParse(clean.substring(6, 8));
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
   static int minutesFromMidnight(TimeOfDay t) => t.hour * 60 + t.minute;
 
   static Map<String, int> range(TimeOfDay start, TimeOfDay end) => {
@@ -30,15 +40,19 @@ class BookingRequestUtils {
         "endMin": minutesFromMidnight(end),
       };
 
-  // ─────────────────────────────────────────────────────────────
-  // NEW: ID helpers
-  // ─────────────────────────────────────────────────────────────
+  // label worker: igual lógica que tu WorkerSelectorPills
+  static String workerLabelFrom(Map<String, dynamic> data, String id) {
+    final ns = data["nameShown"];
+    if (ns is String && ns.trim().isNotEmpty) return ns.trim();
+    final name = data["name"];
+    if (name is String && name.trim().isNotEmpty) return name.trim();
+    return id;
+  }
 
   /// slug simple: lower, quita espacios raros, deja a-z0-9 y _
   static String slug(String input) {
     var s = input.trim().toLowerCase();
 
-    // reemplazos básicos de acentos comunes (pt/es)
     const map = {
       'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a',
       'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
@@ -49,24 +63,16 @@ class BookingRequestUtils {
     };
     map.forEach((k, v) => s = s.replaceAll(k, v));
 
-    // espacios/guiones -> _
     s = s.replaceAll(RegExp(r'\s+'), '_');
     s = s.replaceAll('-', '_');
-
-    // elimina todo lo que no sea a-z 0-9 _
     s = s.replaceAll(RegExp(r'[^a-z0-9_]+'), '');
-
-    // evita ____ repetidos
     s = s.replaceAll(RegExp(r'_+'), '_');
-
-    // sin _ al principio/final
     s = s.replaceAll(RegExp(r'^_+'), '');
     s = s.replaceAll(RegExp(r'_+$'), '');
 
     return s.isEmpty ? 'unknown' : s;
   }
 
-  /// Construye el ID base: <cliente>_<YYYYMMDD>_<procedimiento>
   static String appointmentBaseId({
     required String clientName,
     required DateTime date,
@@ -78,7 +84,6 @@ class BookingRequestUtils {
     return "${datePart}_${clientPart}_${servicePart}";
   }
 
-  /// Devuelve un DocumentReference con fallback _2, _3... si el id ya existe.
   static Future<DocumentReference<Map<String, dynamic>>> uniqueAppointmentRef({
     required FirebaseFirestore db,
     required String baseId,
@@ -93,17 +98,27 @@ class BookingRequestUtils {
       if (!snap.exists) return ref;
     }
 
-    // fallback final (rarísimo)
     return col.doc();
   }
 
   static String formatYyyyMmDdToDdMmYyyy(String yyyymmdd) {
     if (yyyymmdd.length != 8) return yyyymmdd;
-
     final y = yyyymmdd.substring(0, 4);
     final m = yyyymmdd.substring(4, 6);
     final d = yyyymmdd.substring(6, 8);
-
     return "$d/$m/$y";
+  }
+
+  static String bookingRequestBaseId({
+    required String clientName,
+    required DateTime date,
+    required String serviceName,
+    String? workerId, // null => any
+  }) {
+    final datePart = yyyymmdd(date);
+    final clientPart = slug(clientName);
+    final servicePart = slug(serviceName);
+    final workerPart = (workerId == null || workerId.trim().isEmpty) ? "" : "_${slug(workerId)}";
+    return "${datePart}_${clientPart}_${servicePart}${workerPart}_request";
   }
 }

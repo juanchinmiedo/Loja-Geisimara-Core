@@ -11,8 +11,9 @@ import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 import 'package:salon_app/components/ui/app_preview_card.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
-
 import 'package:salon_app/components/client_card.dart';
+import 'package:salon_app/components/ui/app_icon_pill_button.dart';
+
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
@@ -62,7 +63,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       }
     });
 
-    // ✅ Query robusta: SOLO updatedAt.
     final stream = FirebaseFirestore.instance
         .collection('clients')
         .orderBy('updatedAt', descending: true)
@@ -78,7 +78,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
               subtitle: "Search by name/phone/instagram",
               child: LayoutBuilder(
                 builder: (context, c) {
-                  // tamaño del botón + separación
                   const btnSize = 44.0;
                   const gap = 10.0;
 
@@ -99,8 +98,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                         ),
                       ),
                       const SizedBox(width: gap),
-
-                      // ✅ botón crear cliente (solo icono) - ya no solapa nunca
                       SizedBox(
                         height: btnSize,
                         width: btnSize,
@@ -111,15 +108,15 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                             borderRadius: BorderRadius.circular(14),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.22), // un pelín más claro
+                                color: Colors.white.withOpacity(0.22),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.black.withOpacity(0.35)), // ✅ negro como input
+                                border: Border.all(color: Colors.black.withOpacity(0.35)),
                               ),
                               child: const Center(
                                 child: Icon(
                                   Icons.person_add_alt_1_rounded,
                                   color: Color(0xff721c80),
-                                  size: 22, // ⬅️ un pelín más grande
+                                  size: 22,
                                 ),
                               ),
                             ),
@@ -131,7 +128,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                 },
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -150,7 +146,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   final docs = snap.data?.docs ?? [];
                   final q = _searchCtrl.text.trim().toLowerCase();
 
-                  // ✅ Filtrado por search tokens
                   final filtered = q.isEmpty
                       ? docs
                       : docs.where((d) {
@@ -166,11 +161,9 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                     return Text(s.noMatches, style: TextStyle(color: Colors.grey[700]));
                   }
 
-                  // ✅ ORDEN LOCAL: primero los que tienen request activa
                   filtered.sort((a, b) {
                     final av = a.data()['bookingRequestActive'] == true ? 1 : 0;
                     final bv = b.data()['bookingRequestActive'] == true ? 1 : 0;
-                    // desc: true primero
                     return bv.compareTo(av);
                   });
 
@@ -242,22 +235,26 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   bool _loading = true;
   bool _looking = false;
 
-  _PanelOpen? _openPanel; // ✅ solo uno abierto
+  _PanelOpen? _openPanel;
   bool _openAddRequest = false;
 
-  // Add booking request inputs (✅ SIN text YYYYMMDD, ahora date picker)
   final notesCtrl = TextEditingController();
-  DateTime? preferredDay; // solo día
+  DateTime? preferredDay;
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
 
   Map<String, dynamic> _clientData = {};
+
+  static const Color kPurple = Color(0xff721c80);
 
   @override
   void initState() {
     super.initState();
     brRepo = BookingRequestRepo(FirebaseFirestore.instance);
     _loadClient();
+
+    // si tienes prune en repo:
+    // brRepo.pruneExpiredActiveRequests(clientId: widget.clientId);
   }
 
   Future<void> _loadClient() async {
@@ -304,7 +301,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     countryCtrl.dispose();
     phoneCtrl.dispose();
     igCtrl.dispose();
-
     notesCtrl.dispose();
     super.dispose();
   }
@@ -354,7 +350,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
 
     if (ok != true) return;
 
-    // ✅ borrar todo y desactivar
     if (docs.isNotEmpty) {
       await brRepo.deleteAllActiveForClient(widget.clientId);
     }
@@ -375,7 +370,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   Future<void> _createRequest() async {
     final preferredDays = <String>[];
     if (preferredDay != null) {
-      preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!)); // YYYYMMDD
+      preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!));
     }
 
     final ranges = <Map<String, int>>[];
@@ -385,13 +380,12 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
 
     await brRepo.upsertRequest(
       clientId: widget.clientId,
-      exactSlots: const [], // ✅ ya no usamos exactSlots en UI (más simple)
+      exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
       notes: notesCtrl.text.trim(),
     );
 
-    // ✅ marca flag en client (modelo Raquel)
     await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
       "bookingRequestActive": true,
       "bookingRequestUpdatedAt": FieldValue.serverTimestamp(),
@@ -408,19 +402,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking request created")));
-  }
-
-  Future<void> _pickPreferredDay() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = await showDatePicker(
-      context: context,
-      firstDate: today, // ✅ solo desde hoy en adelante
-      lastDate: DateTime(now.year + 2),
-      initialDate: preferredDay ?? today,
-    );
-    if (d == null) return;
-    setState(() => preferredDay = d);
   }
 
   Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
@@ -442,7 +423,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff721c80)),
+            style: ElevatedButton.styleFrom(backgroundColor: kPurple),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Save", style: TextStyle(color: Colors.white)),
           ),
@@ -489,6 +470,95 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     );
   }
 
+  // ✅ misma card compacta que Home (edit y delete en pills)
+  Widget _requestCard({
+    required String requestId,
+    required Map<String, dynamic> br,
+  }) {
+    final days = (br['preferredDays'] as List?) ?? const [];
+    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
+    final notes = (br['notes'] ?? '').toString().trim();
+    final wid = br['workerId'] as String?;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 74),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                Text("• Worker: ${wid == null ? 'Any' : wid}"),
+                if (days.isNotEmpty)
+                  Text(
+                    "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
+                  ),
+                if (ranges.isNotEmpty)
+                  Text(
+                    "• Range(s): ${ranges.map((r) {
+                      final m = Map<String, dynamic>.from(r as Map);
+                      return _formatRange(m);
+                    }).join('; ')}",
+                  ),
+                if (notes.isNotEmpty) Text("• Notes: $notes"),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: AppIconPillButton(
+              icon: Icons.delete_outline,
+              color: Colors.redAccent,
+              shadow: false,
+              tooltip: "Delete request",
+              onTap: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: const Text("Delete request?"),
+                    content: const Text("This will delete this booking request."),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        onPressed: () => Navigator.pop(dctx, true),
+                        child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                await brRepo.deleteRequest(requestId);
+              },
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: AppIconPillButton(
+              icon: Icons.edit_outlined,
+              color: kPurple,
+              shadow: false,
+              tooltip: "Edit notes",
+              onTap: () => _editRequestNotesDialog(requestId, br),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -510,7 +580,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header name + icon
             Row(
               children: [
                 Expanded(
@@ -523,14 +592,13 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                 ),
                 if (_looking)
                   AppPill(
-                    background: const Color(0xff721c80).withOpacity(0.10),
-                    borderColor: const Color(0xff721c80).withOpacity(0.25),
-                    child: const Icon(Icons.notifications_active_outlined, size: 16, color: Color(0xff721c80)),
+                    background: kPurple.withOpacity(0.10),
+                    borderColor: kPurple.withOpacity(0.25),
+                    child: const Icon(Icons.notifications_active_outlined, size: 16, color: kPurple),
                   ),
               ],
             ),
             const SizedBox(height: 10),
-
             AppPreviewCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -541,10 +609,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                 ],
               ),
             ),
-
             const SizedBox(height: 14),
-
-            // Switch looking
             AppSectionCard(
               title: "Booking request",
               child: Row(
@@ -557,13 +622,12 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                   ),
                   AsyncOptimisticSwitch(
                     value: _looking,
-                    switchActiveColor: const Color(0xff721c80),
+                    switchActiveColor: kPurple,
                     onSave: (v) async {
                       if (!v) {
                         await _confirmAndDisableLooking();
                         return;
                       }
-                      // ✅ activar sin crear request todavía
                       setState(() => _looking = true);
                       await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
                         "bookingRequestActive": true,
@@ -574,19 +638,13 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                 ],
               ),
             ),
-
             const SizedBox(height: 14),
-
             if (_looking) ...[
               _buildPanelBookingRequests(),
               const SizedBox(height: 14),
             ],
-
             _buildPanelEditClient(),
-
             const SizedBox(height: 14),
-
-            // Delete bottom
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -617,15 +675,12 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                 label: const Text("Delete client"),
               ),
             ),
-
             const SizedBox(height: 14),
-
-            // CTA booking
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff721c80),
+                  backgroundColor: kPurple,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -681,74 +736,9 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
 
               return Column(
                 children: docs.map((d) {
-                  final br = d.data();
-                  final days = (br['preferredDays'] as List?) ?? const [];
-                  final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-                  final notes = (br['notes'] ?? '').toString();
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.black12),
-                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        if (days.isNotEmpty) Text("• Day(s): ${days.join(', ')}"),
-                        if (ranges.isNotEmpty)
-                          Text(
-                            "• Range(s): ${ranges.map((r) {
-                              final m = Map<String, dynamic>.from(r as Map);
-                              return _formatRange(m);
-                            }).join('; ')}",
-                          ),
-                        if (notes.isNotEmpty) Text("• Notes: $notes"),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _editRequestNotesDialog(d.id, br),
-                                icon: const Icon(Icons.edit_outlined),
-                                label: const Text("Edit notes"),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  final ok = await showDialog<bool>(
-                                    context: context,
-                                    builder: (dctx) => AlertDialog(
-                                      title: const Text("Delete request?"),
-                                      content: const Text("This will delete this booking request."),
-                                      actions: [
-                                        TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                          onPressed: () => Navigator.pop(dctx, true),
-                                          child: const Text("Delete", style: TextStyle(color: Colors.white)),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (ok != true) return;
-                                  await brRepo.deleteRequest(d.id);
-                                },
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                label: const Text("Delete"),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _requestCard(requestId: d.id, br: d.data()),
                   );
                 }).toList(),
               );
@@ -781,9 +771,19 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                   ),
                   const SizedBox(height: 10),
 
-                  // ✅ day picker bonito
                   OutlinedButton.icon(
-                    onPressed: _pickPreferredDay,
+                    onPressed: () async {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final d = await showDatePicker(
+                        context: context,
+                        firstDate: today,
+                        lastDate: DateTime(now.year + 2),
+                        initialDate: preferredDay ?? today,
+                      );
+                      if (d == null) return;
+                      setState(() => preferredDay = d);
+                    },
                     icon: const Icon(Icons.calendar_month),
                     label: Text(
                       preferredDay == null
@@ -832,7 +832,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xff721c80),
+                        backgroundColor: kPurple,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: _createRequest,
@@ -922,7 +922,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
                             ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff721c80)),
+                              style: ElevatedButton.styleFrom(backgroundColor: kPurple),
                               onPressed: () => Navigator.pop(dctx, true),
                               child: const Text("Yes", style: TextStyle(color: Colors.white)),
                             ),

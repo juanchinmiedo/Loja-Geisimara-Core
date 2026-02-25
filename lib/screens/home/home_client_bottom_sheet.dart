@@ -11,6 +11,9 @@ import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
+import 'package:salon_app/widgets/worker_choice_pills.dart';
+import 'package:salon_app/widgets/booking_request_pickers_pills.dart';
+
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 
@@ -40,44 +43,23 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
 
+  String? _selectedWorkerId; // null => any worker
+
   static const Color kPurple = Color(0xff721c80);
-
-  // ✅ Time limits requested
-  // Start: 07:30 - 19:00
-  static const int _startMin = 7 * 60 + 30;
-  static const int _startMax = 19 * 60;
-
-  // End: 09:00 - 21:00
-  static const int _endMin = 9 * 60;
-  static const int _endMax = 21 * 60;
 
   @override
   void initState() {
     super.initState();
     brRepo = BookingRequestRepo(FirebaseFirestore.instance);
+
+    // ✅ limpieza automática al abrir (expiradas)
+    brRepo.pruneExpiredActiveRequests(clientId: widget.clientId);
   }
 
   @override
   void dispose() {
     notesCtrl.dispose();
     super.dispose();
-  }
-
-  // ─────────────────────────────
-  // Helpers (time clamp)
-  // ─────────────────────────────
-  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
-
-  TimeOfDay _fromMin(int minutes) {
-    final h = (minutes ~/ 60).clamp(0, 23);
-    final m = (minutes % 60).clamp(0, 59);
-    return TimeOfDay(hour: h, minute: m);
-  }
-
-  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
-    final v = _toMin(t);
-    final clamped = v.clamp(min, max);
-    return _fromMin(clamped);
   }
 
   String _fullName(Map<String, dynamic> c, String fallback) {
@@ -126,31 +108,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     }
   }
 
-  Future<void> _pickPreferredDay() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = await showDatePicker(
-      context: context,
-      firstDate: today,
-      lastDate: DateTime(now.year + 2),
-      initialDate: preferredDay ?? today,
-    );
-    if (d == null) return;
-    setState(() => preferredDay = d);
-  }
-
   String _formatRange(Map<String, dynamic> r) {
     final s = (r['startMin'] as num?)?.toInt() ?? 0;
     final e = (r['endMin'] as num?)?.toInt() ?? 0;
-    String hm(int m) => "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
+    String hm(int m) =>
+        "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
     return "${hm(s)} - ${hm(e)}";
-  }
-
-  String _ddmmyyyy(DateTime d) {
-    final dd = d.day.toString().padLeft(2, '0');
-    final mm = d.month.toString().padLeft(2, '0');
-    final yy = d.year.toString();
-    return "$dd/$mm/$yy";
   }
 
   Future<void> _createRequest() async {
@@ -166,6 +129,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
     await brRepo.upsertRequest(
       clientId: widget.clientId,
+      workerId: _selectedWorkerId, // ✅
       exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
@@ -184,6 +148,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       preferredDay = null;
       rangeStart = null;
       rangeEnd = null;
+      _selectedWorkerId = null;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -246,146 +211,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     );
   }
 
-  Widget _bookingPickers() {
-    return LayoutBuilder(
-      builder: (context, c) {
-        // Responsive: si se aprieta, quitamos iconos.
-        final showIcons = c.maxWidth >= 340;
-
-        final daySelected = preferredDay != null;
-        final startSelected = rangeStart != null;
-        final endSelected = rangeEnd != null;
-
-        Future<void> pickStart() async {
-          final initial = rangeStart ?? const TimeOfDay(hour: 9, minute: 0);
-          final t = await showTimePicker(
-            context: context,
-            initialTime: initial,
-          );
-          if (t == null) return;
-
-          // ✅ clamp to 07:30 - 19:00
-          final fixedStart = _clampTime(t, _startMin, _startMax);
-
-          setState(() {
-            rangeStart = fixedStart;
-
-            // ✅ If end exists and becomes < start, push end up to start (and keep end bounds).
-            if (rangeEnd != null && _toMin(rangeEnd!) < _toMin(fixedStart)) {
-              final adjustedEnd = _clampTime(fixedStart, _endMin, _endMax);
-              rangeEnd = adjustedEnd;
-            }
-          });
-        }
-
-        Future<void> pickEnd() async {
-          // ✅ If start exists, end picker starts at max(start, endMin)
-          TimeOfDay initial;
-          if (rangeStart != null) {
-            final startMin = _toMin(rangeStart!);
-            final minAllowed = startMin < _endMin ? _endMin : startMin;
-            initial = _fromMin(minAllowed);
-          } else {
-            initial = rangeEnd ?? const TimeOfDay(hour: 12, minute: 0);
-          }
-
-          final t = await showTimePicker(
-            context: context,
-            initialTime: initial,
-          );
-          if (t == null) return;
-
-          // ✅ clamp to 09:00 - 21:00
-          final fixedEnd = _clampTime(t, _endMin, _endMax);
-
-          setState(() {
-            // ✅ ensure end >= start
-            if (rangeStart != null && _toMin(fixedEnd) < _toMin(rangeStart!)) {
-              rangeEnd = _clampTime(rangeStart!, _endMin, _endMax);
-            } else {
-              rangeEnd = fixedEnd;
-            }
-          });
-        }
-
-        Widget dayWidget() {
-          if (!daySelected) {
-            return AppIconPillButton(
-              icon: Icons.calendar_month,
-              color: kPurple,
-              shadow: false,
-              tooltip: "Pick preferred day",
-              onTap: _pickPreferredDay,
-            );
-          }
-
-          return AppIconValuePillButton(
-            color: kPurple,
-            icon: Icons.calendar_month,
-            showIcon: showIcons,
-            label: _ddmmyyyy(preferredDay!),
-            shadow: false,
-            onTap: _pickPreferredDay,
-          );
-        }
-
-        Widget startWidget() {
-          if (rangeStart == null) {
-            return AppIconPillButton(
-              icon: Icons.schedule,
-              color: kPurple,
-              shadow: false,
-              tooltip: "Pick start time",
-              onTap: pickStart,
-            );
-          }
-
-          return AppIconValuePillButton(
-            color: kPurple,
-            icon: Icons.schedule,
-            showIcon: true, // ✅ SIEMPRE icono + espacio + valor
-            label: rangeStart!.format(context),
-            shadow: false,
-            onTap: pickStart,
-          );
-        }
-
-        Widget endWidget() {
-          if (!endSelected) {
-            return AppIconPillButton(
-              icon: Icons.alarm_on, // ✅ reloj (otro)
-              color: kPurple,
-              shadow: false,
-              tooltip: "Pick end time",
-              onTap: pickEnd,
-            );
-          }
-
-          // ✅ icono ANTES del valor
-          return AppIconValuePillButton(
-            color: kPurple,
-            icon: Icons.alarm_on,
-            showIcon: true, // ✅ SIEMPRE icono + espacio + valor
-            label: rangeEnd!.format(context),
-            shadow: false,
-            onTap: pickEnd,
-          );
-        }
-
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            dayWidget(),
-            startWidget(),
-            endWidget(),
-          ],
-        );
-      },
-    );
-  }
-
   // ─────────────────────────────
   // HEIGHT RULES (0/1/2 visible; >2 scroll inside list)
   // ─────────────────────────────
@@ -420,6 +245,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final days = (br['preferredDays'] as List?) ?? const [];
     final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
     final notes = (br['notes'] ?? '').toString();
+    final wid = br['workerId'] as String?;
 
     return Container(
       width: double.infinity,
@@ -438,6 +264,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               children: [
                 const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
+                Text("• Worker: ${wid == null ? 'Any' : wid}"),
                 if (days.isNotEmpty)
                   Text(
                     "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
@@ -658,7 +485,29 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                _bookingPickers(),
+
+                // ✅ Worker pills (Any / worker específico)
+                const Text("Worker", style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                WorkerChoicePills(
+                  value: _selectedWorkerId,
+                  onChanged: (v) => setState(() => _selectedWorkerId = v),
+                  anyLabel: "Any",
+                ),
+
+                const SizedBox(height: 12),
+
+                // ✅ Pickers pills (día/start/end)
+                BookingRequestPickersPills(
+                  preferredDay: preferredDay,
+                  rangeStart: rangeStart,
+                  rangeEnd: rangeEnd,
+                  onDayChanged: (d) => setState(() => preferredDay = d),
+                  onStartChanged: (t) => setState(() => rangeStart = t),
+                  onEndChanged: (t) => setState(() => rangeEnd = t),
+                  purple: kPurple,
+                ),
+
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -728,29 +577,35 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                   AppPill(
                     background: Colors.black.withOpacity(0.06),
                     borderColor: Colors.black.withOpacity(0.12),
-                    child: Text("Requested: $totalAppointments", style: const TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text("Requested: $totalAppointments",
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                   AppPill(
                     background: kPurple.withOpacity(0.10),
                     borderColor: kPurple.withOpacity(0.22),
-                    child: Text("Attended: $totalScheduled", style: const TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text("Attended: $totalScheduled",
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                   AppPill(
                     background: Colors.orange.withOpacity(0.12),
                     borderColor: Colors.orange.withOpacity(0.25),
-                    child: Text("Cancelled: $totalCancelled", style: const TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text("Cancelled: $totalCancelled",
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                   AppPill(
                     background: Colors.redAccent.withOpacity(0.12),
                     borderColor: Colors.redAccent.withOpacity(0.25),
-                    child: Text("No-show: $totalNoShow", style: const TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text("No-show: $totalNoShow",
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              Text("Last attended appointment", style: TextStyle(fontWeight: FontWeight.w900, color: tint)),
+              Text("Last attended appointment",
+                  style: TextStyle(fontWeight: FontWeight.w900, color: tint)),
               const SizedBox(height: 6),
-              Text((lastSummary.isEmpty ? "—" : lastSummary), style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text((lastSummary.isEmpty ? "—" : lastSummary),
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
               Text("Date: ${fmtTs(lastAt)}", style: TextStyle(color: Colors.grey[700])),
             ],
@@ -762,10 +617,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final clientStream = FirebaseFirestore.instance.collection('clients').doc(widget.clientId).snapshots();
+    final clientStream =
+        FirebaseFirestore.instance.collection('clients').doc(widget.clientId).snapshots();
 
     final bool wantsRequests = widget.mode == HomeAdminMode.looking;
-    final requestsStream = wantsRequests ? brRepo.streamActiveRequestsForClient(widget.clientId) : null;
+    final requestsStream =
+        wantsRequests ? brRepo.streamActiveRequestsForClient(widget.clientId) : null;
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: clientStream,
@@ -778,7 +635,9 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         return StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
           stream: requestsStream,
           builder: (context, reqSnap) {
-            final activeDocs = wantsRequests ? (reqSnap.data ?? const []) : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final activeDocs = wantsRequests
+                ? (reqSnap.data ?? const [])
+                : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
             final requestCount = wantsRequests ? activeDocs.length : 0;
 
             final screenH = MediaQuery.of(context).size.height;
@@ -831,7 +690,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                         children: [
                           Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
                           const SizedBox(height: 4),
-                          if (contact.isNotEmpty) Text(contact, style: TextStyle(color: Colors.grey[700])),
+                          if (contact.isNotEmpty)
+                            Text(contact, style: TextStyle(color: Colors.grey[700])),
                         ],
                       ),
                     ),

@@ -144,7 +144,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
       );
     }
 
-    // ✅ IMPORTANTE: aquí ya NO envolvemos en AppSectionCard (“quita la caja Filters”)
     return Row(
       children: [
         pill(
@@ -196,7 +195,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
   Widget build(BuildContext context) {
     final stream = _queryForMode().snapshots();
 
-    // ✅ panel fijo inferior (botones siempre visibles)
     const fixedBottomPanelHeight = 92.0;
 
     return Scaffold(
@@ -275,7 +273,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               child: InkWell(
-                                onTap: () => _openClientSheet(clientId), // ✅ ya NO redirige
+                                onTap: () => _openClientSheet(clientId),
                                 borderRadius: BorderRadius.circular(14),
                                 child: AppSectionCard(
                                   title: displayName,
@@ -312,8 +310,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               ),
             ),
           ),
-
-          // ✅ panel fijo (sin AppSectionCard, sin “Filters” box)
           Positioned(
             left: 0,
             right: 0,
