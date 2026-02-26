@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:salon_app/provider/user_provider.dart';
 
 import 'package:salon_app/services/appointment_service.dart';
+import 'package:salon_app/repositories/booking_request_repo.dart';
 
 import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/localization_helper.dart';
@@ -82,6 +83,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   final instagramFocus = FocusNode();
 
   late final AppointmentService _apptService;
+  late final BookingRequestRepo _brRepo;
 
   // Cerrar teclado
   Future<void> _closeKeyboard() async {
@@ -128,6 +130,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
     }
 
     _apptService = AppointmentService(FirebaseFirestore.instance);
+    _brRepo = BookingRequestRepo(FirebaseFirestore.instance);
 
     clientSearchCtrl.addListener(() {
       if (mounted) setState(() {});
@@ -1023,6 +1026,20 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                           appointmentDate: dt,
                           lastSummary: translatedName,
                         );
+
+                        // ✅ Si ya existían booking requests de este cliente, se borran.
+                        // Importante: si esto falla por cualquier motivo, NO debe impedir
+                        // cerrar el diálogo ni crear el appointment.
+                        try {
+                          await _brRepo.deleteExistingRequestsBecauseAppointmentWasCreated(
+                            clientId: clientId,
+                            appointmentId: apptRef.id,
+                            appointmentDate: dt,
+                            serviceName: translatedName,
+                          );
+                        } catch (_) {
+                          // ignorar
+                        }
 
                         if (!mounted) return;
                         Navigator.pop(context);

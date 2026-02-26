@@ -15,6 +15,7 @@ import 'package:salon_app/components/service_type_selectors.dart';
 
 // ✅ NEW
 import 'package:salon_app/services/appointment_service.dart';
+import 'package:salon_app/repositories/booking_request_repo.dart';
 
 class EditAppointmentDialog extends StatefulWidget {
   const EditAppointmentDialog({
@@ -63,12 +64,14 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
   // ✅ NEW
   late final AppointmentService _apptService;
+  late final BookingRequestRepo _brRepo;
 
   @override
   void initState() {
     super.initState();
 
     _apptService = AppointmentService(FirebaseFirestore.instance);
+    _brRepo = BookingRequestRepo(FirebaseFirestore.instance);
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -287,6 +290,14 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   Future<void> _removeAppointment() async {
     final s = S.of(context);
 
+    // ✅ slot actual (si estaba scheduled, al cancelar/borrar queda libre)
+    final oldTs = widget.data['appointmentDate'];
+    final oldDt = oldTs is Timestamp ? oldTs.toDate() : DateTime.now();
+    final oldDur = (widget.data['durationMin'] is num)
+        ? (widget.data['durationMin'] as num).toInt()
+        : 0;
+    final oldWorkerId = (widget.data['workerId'] ?? '').toString().trim();
+
     final clientId = (widget.data['clientId'] ?? '').toString();
     if (clientId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,16 +382,54 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'cancelled',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {
+            // Nunca romper el flujo por notificaciones.
+          }
+        }
       } else if (choice == 'noShow') {
         await _apptService.noShowAppointment(
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'noShow',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {}
+        }
       } else if (choice == 'deletePermanent') {
         await _apptService.deletePermanent(
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'deletePermanent',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {}
+        }
       }
 
       if (!mounted) return;
@@ -635,6 +684,13 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                           final durationMin = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
                           final basePrice = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
 
+                          // ✅ OLD slot (antes del edit) para detectar hueco liberado
+                          final oldTs = widget.data['appointmentDate'];
+                          final oldDt = oldTs is Timestamp ? oldTs.toDate() : DateTime.now();
+                          final oldDur = (widget.data['durationMin'] is num)
+                              ? (widget.data['durationMin'] as num).toInt()
+                              : 0;
+
                           final userProv = context.read<UserProvider>();
 
                           final existingWorkerId = (widget.data['workerId'] ?? '').toString().trim();
@@ -716,6 +772,31 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             'appointmentDate': Timestamp.fromDate(dt),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
+
+                          // ✅ Si el edit movió la cita (o cambió duración), ese hueco viejo quedó libre.
+                          if (canCheckConflicts &&
+                              effectiveWorkerId != null &&
+                              effectiveWorkerId.isNotEmpty &&
+                              oldDur > 0) {
+                            final moved = oldDt.year != dt.year ||
+                                oldDt.month != dt.month ||
+                                oldDt.day != dt.day ||
+                                oldDt.hour != dt.hour ||
+                                oldDt.minute != dt.minute;
+                            final durChanged = oldDur != durationMin;
+
+                            if (moved || durChanged) {
+                              try {
+                                await _brRepo.notifyIfFreedSlotMatchesRequests(
+                                  freedStart: oldDt,
+                                  freedDurationMin: oldDur,
+                                  workerId: effectiveWorkerId,
+                                  reason: 'edit',
+                                  sourceAppointmentId: widget.appointmentId,
+                                );
+                              } catch (_) {}
+                            }
+                          }
 
                           if (!mounted) return;
                           Navigator.pop(context);

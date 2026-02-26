@@ -6,6 +6,7 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 
 import 'package:salon_app/screens/home/home_client_bottom_sheet.dart';
+import 'package:salon_app/widgets/admin_notifications_overlay.dart';
 
 class HomeAdminScreen extends StatefulWidget {
   const HomeAdminScreen({super.key});
@@ -209,6 +210,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     title: "Admin Home",
                     subtitle: _subtitle(),
                   ),
+                  // (contenido sigue...)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -308,6 +310,89 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          // ✅ Campana + badge en HOME (no en Clients)
+          Positioned(
+            right: 16,
+            top: MediaQuery.of(context).padding.top + 10,
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('clients')
+                  .doc('__system__')
+                  .collection('history')
+                  .orderBy('createdAt', descending: true)
+                  .limit(200)
+                  .snapshots(),
+              builder: (context, snapA) {
+                final count = (snapA.data?.docs.length ?? 0);
+
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      AdminNotificationsOverlay.show(
+                        context,
+                        onOpenClient: (clientId) {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => HomeClientBottomSheet(
+                              clientId: clientId, 
+                              mode: HomeAdminMode.looking, 
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.20),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.black.withOpacity(0.25)),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.notifications_active_outlined,
+                              color: Color(0xff721c80),
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: Text(
+                                count > 99 ? '99+' : '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           Positioned(

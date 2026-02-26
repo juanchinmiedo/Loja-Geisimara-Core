@@ -9,6 +9,7 @@ import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
+import 'package:salon_app/repositories/booking_request_repo.dart';
 
 class PastAppointmentDialog extends StatefulWidget {
   const PastAppointmentDialog({
@@ -51,6 +52,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
   // NEW
   late final AppointmentService _apptService;
+  late final BookingRequestRepo _brRepo;
 
   // Precio final (opcional)
   final TextEditingController finalPriceCtrl = TextEditingController();
@@ -60,6 +62,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
     super.initState();
 
     _apptService = AppointmentService(FirebaseFirestore.instance);
+    _brRepo = BookingRequestRepo(FirebaseFirestore.instance);
 
     // Hora init
     final originalTs = widget.data['appointmentDate'];
@@ -260,6 +263,14 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
   Future<void> _removeAppointment() async {
     final s = S.of(context);
 
+    // ✅ slot actual (si estaba scheduled, al cancelar/borrar queda libre)
+    final oldTs = widget.data['appointmentDate'];
+    final oldDt = oldTs is Timestamp ? oldTs.toDate() : DateTime.now();
+    final oldDur = (widget.data['durationMin'] is num)
+        ? (widget.data['durationMin'] as num).toInt()
+        : 0;
+    final oldWorkerId = (widget.data['workerId'] ?? '').toString().trim();
+
     final clientId = (widget.data['clientId'] ?? '').toString();
     if (clientId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,16 +352,52 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'cancelled',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {}
+        }
       } else if (choice == 'noShow') {
         await _apptService.noShowAppointment(
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'noShow',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {}
+        }
       } else if (choice == 'deletePermanent') {
         await _apptService.deletePermanent(
           appointmentId: widget.appointmentId,
           clientId: clientId,
         );
+
+        if (oldWorkerId.isNotEmpty && oldDur > 0) {
+          try {
+            await _brRepo.notifyIfFreedSlotMatchesRequests(
+              freedStart: oldDt,
+              freedDurationMin: oldDur,
+              workerId: oldWorkerId,
+              reason: 'deletePermanent',
+              sourceAppointmentId: widget.appointmentId,
+            );
+          } catch (_) {}
+        }
       }
 
       if (!mounted) return;
