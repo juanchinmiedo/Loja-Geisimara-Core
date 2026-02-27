@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+import 'package:salon_app/provider/admin_nav_provider.dart';
+
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
@@ -335,15 +338,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                       AdminNotificationsOverlay.show(
                         context,
                         onOpenClient: (clientId) {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => HomeClientBottomSheet(
-                              clientId: clientId, 
-                              mode: HomeAdminMode.looking, 
-                            ),
-                          );
+                          // ✅ ir a Clients y abrir perfil
+                          context.read<AdminNavProvider>().goToClientsAndOpen(clientId);
                         },
                       );
                     },

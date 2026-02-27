@@ -55,8 +55,9 @@ class AdminNotificationsOverlay extends StatelessWidget {
     final db = FirebaseFirestore.instance;
     final q = db
         .collection('clients')
-        .doc('__system__')
+        .doc('_system')
         .collection('history')
+        .where('createdAt', isGreaterThan: Timestamp(0, 0))
         .orderBy('createdAt', descending: true)
         .limit(60);
 

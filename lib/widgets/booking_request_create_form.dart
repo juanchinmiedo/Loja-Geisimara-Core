@@ -56,6 +56,13 @@ class BookingRequestCreateForm extends StatelessWidget {
           minLines: 1,
           maxLines: 3,
           onChanged: onNotesChanged,
+
+          // ✅ FIX: tap fuera -> pierde foco y no vuelve a abrir teclado
+          onTapOutside: (_) {
+            FocusScope.of(context).unfocus();
+            FocusManager.instance.primaryFocus?.unfocus();
+          },
+
           decoration: const InputDecoration(
             labelText: "Notes / preferences",
             border: OutlineInputBorder(),
@@ -90,7 +97,11 @@ class BookingRequestCreateForm extends StatelessWidget {
               backgroundColor: purple,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            onPressed: onCreate,
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              FocusManager.instance.primaryFocus?.unfocus();
+              onCreate();
+            },
             icon: const Icon(Icons.check, color: Colors.white),
             label: const Text(
               "Create request",

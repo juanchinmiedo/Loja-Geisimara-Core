@@ -102,6 +102,240 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     }
   }
 
+    static const int kDefaultSlotMin = 30; // ✅ puedes ajustar
+
+  DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+  DateTime _endExclusive(DateTime d) => DateTime(d.year, d.month, d.day).add(const Duration(days: 1));
+
+  int _toMin(DateTime dt) => dt.hour * 60 + dt.minute;
+
+  bool _overlaps(int a0, int a1, int b0, int b1) {
+    final s = a0 > b0 ? a0 : b0;
+    final e = a1 < b1 ? a1 : b1;
+    return e > s;
+  }
+
+  static const int kStepMin = 5; // granularidad del escaneo
+
+  String _fmtHm(int minutes) {
+    final h = (minutes ~/ 60).toString().padLeft(2, '0');
+    final m = (minutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String _fmtDdMm(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    return '$dd/$mm';
+  }
+
+  int _requestedDurationMin(Map<String, dynamic> br) {
+    // ✅ por ahora: si en el futuro guardamos durationMin/serviceId en request, lo usa
+    final v = br['durationMin'];
+    if (v is num) return v.toInt();
+    return 30; // fallback (lo cambiamos cuando metas procedure)
+  }
+
+  int _allowedOverlapMin(int durMin) {
+    // ✅ regla nueva:
+    // si el procedimiento > 60 min, se permite solapamiento máximo 15
+    return (durMin > 60) ? 15 : 0;
+  }
+
+  int _overlapMin(int a0, int a1, int b0, int b1) {
+    final s = a0 > b0 ? a0 : b0;
+    final e = a1 < b1 ? a1 : b1;
+    return (e > s) ? (e - s) : 0;
+  }
+
+  bool _slotOkForWorkerWithTolerance({
+    required DateTime day,
+    required int startMin,
+    required int durMin,
+    required String workerId,
+    required int allowedOverlap,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+  }) {
+    final endMin = startMin + durMin;
+
+    for (final a in appts) {
+      final data = a.data();
+      if ((data['status'] ?? '').toString() != 'scheduled') continue;
+      if ((data['workerId'] ?? '').toString().trim() != workerId) continue;
+
+      final ts = data['appointmentDate'];
+      if (ts is! Timestamp) continue;
+      final dt = ts.toDate();
+
+      if (dt.year != day.year || dt.month != day.month || dt.day != day.day) continue;
+
+      final adur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 0;
+      if (adur <= 0) continue;
+
+      final a0 = dt.hour * 60 + dt.minute;
+      final a1 = a0 + adur;
+
+      final ov = _overlapMin(startMin, endMin, a0, a1);
+      if (ov > allowedOverlap) return false; // ❌ supera tolerancia
+    }
+
+    return true;
+  }
+
+  /// ✅ devuelve el primer inicio disponible en ese día (según rangos y tolerancia)
+  DateTime? _firstSlotOnDayForWorker({
+    required DateTime day,
+    required List<Map<String, int>> ranges,
+    required int durMin,
+    required String workerId,
+    required int allowedOverlap,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+  }) {
+    for (final r in ranges) {
+      final rs = r['startMin'] ?? 0;
+      final re = r['endMin'] ?? (24 * 60);
+
+      // scan en pasos de 5 min
+      for (int s = rs; s + durMin <= re; s += kStepMin) {
+        final ok = _slotOkForWorkerWithTolerance(
+          day: day,
+          startMin: s,
+          durMin: durMin,
+          workerId: workerId,
+          allowedOverlap: allowedOverlap,
+          appts: appts,
+        );
+        if (ok) {
+          return DateTime(day.year, day.month, day.day, s ~/ 60, s % 60);
+        }
+      }
+    }
+    return null;
+  }
+
+  List<Map<String, int>> _extractRanges(Map<String, dynamic> br) {
+    final raw = (br['preferredTimeRanges'] as List?) ?? const [];
+    if (raw.isEmpty) {
+      // sin rangos => todo el día
+      return const [{'startMin': 0, 'endMin': 24 * 60}];
+    }
+
+    final out = <Map<String, int>>[];
+    for (final r in raw) {
+      if (r is! Map) continue;
+      final m = Map<String, dynamic>.from(r);
+
+      final s = (m['startMin'] ?? m['start']);
+      final e = (m['endMin'] ?? m['end']);
+
+      final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
+      final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
+      if (sm >= 0 && em > sm) out.add({'startMin': sm, 'endMin': em});
+    }
+
+    if (out.isEmpty) return const [{'startMin': 0, 'endMin': 24 * 60}];
+    return out;
+  }
+
+  /// ✅ calcula si hay hueco para esta request, usando appointments ya cargados
+  ({BookingRequestAvailability status, DateTime? nextStart}) _availabilityInfoForRequest({
+    required Map<String, dynamic> br,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+  }) {
+    final workerId = (br['workerId'] ?? '').toString().trim();
+    final isAnyWorker = workerId.isEmpty;
+
+    final preferredDays = (br['preferredDays'] as List?)
+            ?.map((e) => e.toString())
+            .where((s) => s.trim().isNotEmpty)
+            .toList() ??
+        const <String>[];
+
+    final exactSlots = (br['exactSlots'] as List?) ?? const [];
+    final ranges = _extractRanges(br);
+
+    final durMin = _requestedDurationMin(br);
+    final allowedOverlap = _allowedOverlapMin(durMin);
+
+    if (preferredDays.isEmpty && exactSlots.isEmpty) {
+      return (status: BookingRequestAvailability.unknown, nextStart: null);
+    }
+
+    // ✅ Si worker = Any, por ahora lo marcamos "checking" (lo hacemos exacto cuando carguemos workers)
+    if (isAnyWorker) {
+      return (status: BookingRequestAvailability.unknown, nextStart: null);
+    }
+
+    // 1) exactSlots: el primer exactSlot que sea aceptable
+    for (final x in exactSlots) {
+      if (x is! Timestamp) continue;
+      final dt = x.toDate();
+      final day = DateTime(dt.year, dt.month, dt.day);
+      final sMin = dt.hour * 60 + dt.minute;
+
+      final ok = _slotOkForWorkerWithTolerance(
+        day: day,
+        startMin: sMin,
+        durMin: durMin,
+        workerId: workerId,
+        allowedOverlap: allowedOverlap,
+        appts: appts,
+      );
+
+      if (ok) return (status: BookingRequestAvailability.available, nextStart: dt);
+    }
+
+    // 2) preferredDays: buscar el primer slot entre los días (en orden)
+    final parsedDays = preferredDays
+        .map((k) => BookingRequestUtils.parseYyyymmdd(k))
+        .whereType<DateTime>()
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+
+    for (final day in parsedDays) {
+      final first = _firstSlotOnDayForWorker(
+        day: day,
+        ranges: ranges,
+        durMin: durMin,
+        workerId: workerId,
+        allowedOverlap: allowedOverlap,
+        appts: appts,
+      );
+      if (first != null) {
+        return (status: BookingRequestAvailability.available, nextStart: first);
+      }
+    }
+
+    return (status: BookingRequestAvailability.unavailable, nextStart: null);
+  }
+
+  String _pillLabelForRequest(Map<String, dynamic> br, BookingRequestAvailability status, DateTime? nextStart) {
+    if (status == BookingRequestAvailability.unknown) return "Checking…";
+    if (status == BookingRequestAvailability.unavailable) return "No availability";
+
+    // ✅ verde: "hh:mm - dd/mm"
+    if (nextStart == null) return " ";
+
+    final hm = "${nextStart.hour.toString().padLeft(2, '0')}:${nextStart.minute.toString().padLeft(2, '0')}";
+    final ddmm = _fmtDdMm(nextStart);
+    return "$hm - $ddmm";
+  }
+  String _availabilityLabel(Map<String, dynamic> br, BookingRequestAvailability a) {
+    // primera fecha como etiqueta bonita
+    final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final first = days.isNotEmpty ? days.first : '';
+    final ddmmyyyy = first.isNotEmpty ? BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(first) : '';
+
+    switch (a) {
+      case BookingRequestAvailability.available:
+        return ddmmyyyy.isNotEmpty ? "Available ($ddmmyyyy)" : "Available";
+      case BookingRequestAvailability.unavailable:
+        return ddmmyyyy.isNotEmpty ? "No slot ($ddmmyyyy)" : "No availability";
+      case BookingRequestAvailability.unknown:
+        return "Checking…";
+    }
+  }
+
   Future<void> _createRequest() async {
     final preferredDays = <String>[];
     if (preferredDay != null) {
@@ -198,21 +432,55 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     );
   }
 
-  /// ✅ EDIT NOTES dialog sin controller (evita crash con teclado + cancelar)
   Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
-    String draft = (data['notes'] ?? '').toString();
+    final ctrl = TextEditingController(text: (data['notes'] ?? '').toString());
 
     final ok = await showDialog<bool>(
       context: context,
+      barrierDismissible: true,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) => AlertDialog(
-            title: const Text("Edit request"),
-            content: TextFormField(
-              initialValue: draft,
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+
+          onTap: () => FocusScope.of(ctx).unfocus(),
+
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(16, 14, 10, 8),
+            contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            title: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Edit request",
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: "Close",
+                  onPressed: () {
+                    FocusScope.of(ctx).unfocus();
+                    Navigator.pop(ctx, false);
+                  },
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
               minLines: 1,
               maxLines: 4,
-              onChanged: (v) => setLocal(() => draft = v),
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+
+              // ✅ Esto arregla EXACTAMENTE tu problema:
+              // click fuera del input -> pierde foco -> no se reabre el teclado luego.
+              onTapOutside: (_) => FocusScope.of(ctx).unfocus(),
+
               decoration: const InputDecoration(
                 labelText: "Notes",
                 border: OutlineInputBorder(),
@@ -243,7 +511,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (ok == true) {
       await brRepo.updateRequestNotes(
         requestId: requestId,
-        notes: draft.trim(),
+        notes: ctrl.text.trim(),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -251,16 +519,23 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         );
       }
     }
+
+    ctrl.dispose();
   }
 
   Widget _requestTile({
     required String requestId,
     required Map<String, dynamic> br,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appointmentsDocs,
   }) {
+    final info = _availabilityInfoForRequest(br: br, appts: appointmentsDocs);
+    final label = _pillLabelForRequest(br, info.status, info.nextStart);
     return BookingRequestCard(
       requestId: requestId,
       br: br,
       purple: kPurple,
+      availability: info.status,
+      availabilityLabel: label,
       onDelete: () async {
         final ok = await showDialog<bool>(
           context: context,
@@ -286,6 +561,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   Widget _activeRequestsSection({
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appointmentsDocs,
   }) {
     if (docs.isEmpty) {
       return AppSectionCard(
@@ -309,6 +585,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               if (i > 0) const SizedBox(height: 10),
               _requestTile(
                 requestId: docs[i].id,
+                appointmentsDocs: appointmentsDocs,
                 br: docs[i].data(),
               ),
             ],
@@ -332,6 +609,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
             final d = docs[i];
             return _requestTile(
               requestId: d.id,
+              appointmentsDocs: appointmentsDocs,
               br: d.data(),
             );
           },
@@ -343,6 +621,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   Widget _lookingBody({
     required Map<String, dynamic> client,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> activeRequestDocs,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appointmentsDocs,
   }) {
     final looking = client['bookingRequestActive'] == true;
 
@@ -419,7 +698,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
           ),
         ],
         const SizedBox(height: 12),
-        _activeRequestsSection(docs: activeRequestDocs),
+        _activeRequestsSection(docs: activeRequestDocs, appointmentsDocs: appointmentsDocs),
       ],
     );
   }
@@ -588,8 +867,57 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: (widget.mode == HomeAdminMode.looking)
-                              ? _lookingBody(client: data, activeRequestDocs: activeDocs)
-                              : _statsBody(data),
+                            ? Builder(
+                                builder: (_) {
+                                  // ✅ calcula rango min/max de días de las requests
+                                  DateTime? minDay;
+                                  DateTime? maxDay;
+
+                                  for (final d in activeDocs) {
+                                    final br = d.data();
+                                    final days = (br['preferredDays'] as List?)
+                                            ?.map((e) => e.toString())
+                                            .toList() ??
+                                        const <String>[];
+
+                                    for (final dayKey in days) {
+                                      final dt = BookingRequestUtils.parseYyyymmdd(dayKey);
+                                      if (dt == null) continue;
+                                      minDay = (minDay == null || dt.isBefore(minDay!)) ? dt : minDay;
+                                      maxDay = (maxDay == null || dt.isAfter(maxDay!)) ? dt : maxDay;
+                                    }
+                                  }
+
+                                  // si no hay días, no hacemos stream de appointments
+                                  if (minDay == null || maxDay == null) {
+                                    return _lookingBody(
+                                      client: data,
+                                      activeRequestDocs: activeDocs,
+                                      appointmentsDocs: const [],
+                                    );
+                                  }
+
+                                  final q = FirebaseFirestore.instance
+                                      .collection('appointments')
+                                      .where('appointmentDate',
+                                          isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay!)))
+                                      .where('appointmentDate',
+                                          isLessThan: Timestamp.fromDate(_endExclusive(maxDay!)));
+
+                                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                    stream: q.snapshots(),
+                                    builder: (context, apptSnap) {
+                                      final apptDocs = apptSnap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                                      return _lookingBody(
+                                        client: data,
+                                        activeRequestDocs: activeDocs,
+                                        appointmentsDocs: apptDocs,
+                                      );
+                                    },
+                                  );
+                                },
+                              )
+                            : _statsBody(data),
                         ),
                       ),
                     ),

@@ -750,10 +750,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                               ? (selectedType!['extraPrice'] as num).toDouble()
                               : 0.0;
 
-                          await FirebaseFirestore.instance
-                              .collection('appointments')
-                              .doc(widget.appointmentId)
-                              .update({
+                          await FirebaseFirestore.instance.collection('appointments').doc(widget.appointmentId).update({
                             'serviceId': selectedServiceId,
                             'serviceNameKey': svcKey,
                             'serviceName': translatedName,
@@ -772,6 +769,18 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             'appointmentDate': Timestamp.fromDate(dt),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
+                          
+                          final clientId = (widget.data['clientId'] ?? '').toString().trim();
+                          if (clientId.isNotEmpty) {
+                            try {
+                              await _brRepo.deleteExistingRequestsBecauseAppointmentWasCreated(
+                                clientId: clientId,
+                                appointmentId: widget.appointmentId,
+                                appointmentDate: dt,
+                                serviceName: translatedName,
+                              );
+                            } catch (_) {}
+                          }
 
                           // ✅ Si el edit movió la cita (o cambió duración), ese hueco viejo quedó libre.
                           if (canCheckConflicts &&

@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 
+enum BookingRequestAvailability { available, unavailable, unknown }
+
 /// Reusable compact card for a single booking request.
-///
-/// Goals:
-/// - No overlay/superposition of action buttons.
-/// - Keeps the compact look.
 /// - Worker shows REAL name if possible (or Any if null).
+/// - Shows a Google-like availability pill (green/red/grey).
 class BookingRequestCard extends StatelessWidget {
   const BookingRequestCard({
     super.key,
@@ -17,6 +16,8 @@ class BookingRequestCard extends StatelessWidget {
     required this.purple,
     required this.onDelete,
     required this.onEditNotes,
+    this.availability = BookingRequestAvailability.unknown,
+    this.availabilityLabel,
   });
 
   final String requestId;
@@ -25,16 +26,65 @@ class BookingRequestCard extends StatelessWidget {
   final Future<void> Function() onDelete;
   final VoidCallback onEditNotes;
 
+  final BookingRequestAvailability availability;
+  final String? availabilityLabel;
+
   String _formatRange(Map<String, dynamic> r) {
-    final s = (r['startMin'] as num?)?.toInt() ?? 0;
-    final e = (r['endMin'] as num?)?.toInt() ?? 0;
+    // soporta startMin/endMin o start/end
+    final s = (r['startMin'] ?? r['start']);
+    final e = (r['endMin'] ?? r['end']);
+    final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
+    final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? 0;
+
     String hm(int m) =>
         "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
-    return "${hm(s)} - ${hm(e)}";
+    return "${hm(sm)} - ${hm(em)}";
+  }
+
+  Widget _availabilityPill() {
+    Color bg;
+    Color border;
+    Color text;
+    String label;
+
+    switch (availability) {
+      case BookingRequestAvailability.available:
+        bg = const Color(0xFFE6F4EA);
+        border = const Color(0xFF34A853);
+        text = const Color(0xFF137333);
+        label = availabilityLabel ?? "";
+        break;
+      case BookingRequestAvailability.unavailable:
+        bg = const Color(0xFFFCE8E6); // google red tint
+        border = const Color(0xFFEA4335);
+        text = const Color(0xFFA50E0E);
+        label = availabilityLabel ?? "No availability";
+        break;
+      case BookingRequestAvailability.unknown:
+        bg = Colors.black.withOpacity(0.05);
+        border = Colors.black.withOpacity(0.12);
+        text = Colors.black.withOpacity(0.70);
+        label = availabilityLabel ?? "Checking…";
+        break;
+    }
+    if (label.trim().isEmpty) label = " "; // mantiene tamaño pill y evita que el pill colapse si no hay texto
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: text),
+      ),
+    );
   }
 
   Widget _workerLine(String? workerId) {
-    if (workerId == null) {
+    if (workerId == null || workerId.trim().isEmpty) {
       return const Text("• Worker: Any");
     }
 
@@ -46,7 +96,6 @@ class BookingRequestCard extends StatelessWidget {
           final label = BookingRequestUtils.workerLabelFrom(data, workerId);
           return Text("• Worker: $label");
         }
-        // fallback mientras carga o si no existe
         return Text("• Worker: $workerId");
       },
     );
@@ -79,10 +128,17 @@ class BookingRequestCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
+                  // header row: title + pill
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                      _availabilityPill(),
+                    ],
+                  ),
                   const SizedBox(height: 6),
 
-                  /// ✅ Worker: nombre real o Any
                   _workerLine(workerId),
 
                   if (days.isNotEmpty)
@@ -102,7 +158,6 @@ class BookingRequestCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
 
-            /// ✅ SIN STACK: botones nunca se superponen
             Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

@@ -18,14 +18,15 @@ class BookingRequestRepo {
   ///   /clients/__system__/history/{entryId}
   CollectionReference<Map<String, dynamic>> get _alerts => db
       .collection('clients')
-      .doc('__system__')
+      .doc('_system')
       .collection('history');
 
   Future<void> _safeAddAlert(Map<String, dynamic> data) async {
     try {
       await _alerts.add({
         ...data,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': Timestamp.now(),
+        'serverCreatedAt': FieldValue.serverTimestamp(),
       });
     } catch (_) {
       // Las alertas nunca deben romper flujos principales.
@@ -156,52 +157,60 @@ class BookingRequestRepo {
   /// - Si NO existían, no toca nada.
   /// - Siempre deja al cliente libre para crear requests nuevas después.
   /// - Crea una notificación estética en /clients/__system__/history.
-  Future<int> deleteExistingRequestsBecauseAppointmentWasCreated({
-    required String clientId,
-    required String appointmentId,
-    DateTime? appointmentDate,
-    String? serviceName,
-  }) async {
-    final docs = await getActiveRequestsForClient(clientId);
-    if (docs.isEmpty) return 0;
+    Future<int> deleteExistingRequestsBecauseAppointmentWasCreated({
+      required String clientId,
+      required String appointmentId,
+      DateTime? appointmentDate,
+      String? serviceName,
+    }) async {
+      final cid = clientId.trim();
 
-    final batch = db.batch();
-    for (final d in docs) {
-      batch.delete(d.reference);
-    }
+      // 1) buscar activas
+      final snap = await _req
+          .where('clientId', isEqualTo: cid)
+          .where('active', isEqualTo: true)
+          .get();
 
-    // Actualiza el cliente (así no quedan flags viejos)
-    batch.set(
-      _clientRef(clientId),
-      {
-        'bookingRequestActive': false,
-        'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+      if (snap.docs.isEmpty) return 0;
 
-    // Notificación
-    final when = appointmentDate;
-    final title = 'Booking request removed';
-    final body =
-        'Deleted ${docs.length} request(s) because an appointment was created'
+      // 2) borrar en batch (solo deletes + update client)
+      final batch = db.batch();
+      for (final d in snap.docs) {
+        batch.delete(d.reference);
+      }
+
+      batch.set(
+        _clientRef(cid),
+        {
+          'bookingRequestActive': false,
+          'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit(); // ✅ esto ya no depende de notificaciones
+
+      // 3) notificación aparte (si falla, no afecta al delete)
+      final when = appointmentDate;
+      final title = 'Booking request removed';
+      final whenStr = when == null ? null : BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(BookingRequestUtils.yyyymmdd(when));
+      
+      final body =
+        'Deleted ${snap.docs.length} request(s) because an appointment was created'
         '${serviceName != null && serviceName.trim().isNotEmpty ? ' ($serviceName)' : ''}'
-        '${when != null ? ' for ${BookingRequestUtils.yyyymmdd(when)}' : ''}.';
+        '${whenStr != null ? ' for $whenStr' : ''}.';
 
-    batch.set(_alerts.doc(), {
-      'type': 'booking_request_removed_by_appointment',
-      'clientId': clientId,
-      'appointmentId': appointmentId,
-      'title': title,
-      'body': body,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      await _safeAddAlert({
+        'type': 'booking_request_removed_by_appointment',
+        'clientId': cid,
+        'appointmentId': appointmentId,
+        'title': title,
+        'body': body,
+      });
 
-    await batch.commit();
-    return docs.length;
-  }
-
+      return snap.docs.length;
+    }
   /// ✅ Cuando un appointment se mueve / cancela / se borra, puede quedar un hueco libre.
   /// Esta función revisa booking requests activas y crea una notificación con "matches".
   ///
@@ -217,6 +226,7 @@ class BookingRequestRepo {
 
     final freedEnd = freedStart.add(Duration(minutes: freedDurationMin));
     final dayKey = BookingRequestUtils.yyyymmdd(freedStart);
+    final dayLabel = BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(dayKey);
     final startMin = freedStart.hour * 60 + freedStart.minute;
     final endMin = freedEnd.hour * 60 + freedEnd.minute;
 
@@ -302,9 +312,8 @@ class BookingRequestRepo {
     final title = 'Freed slot matches booking requests';
     final hh = freedStart.hour.toString().padLeft(2, '0');
     final mm = freedStart.minute.toString().padLeft(2, '0');
-    final body =
-        'A slot became available on $dayKey ($hh:$mm for ${freedDurationMin}m). Matches: ${matched.length}.';
-
+    final body ='A slot became available on $dayLabel ($hh:$mm for ${freedDurationMin}m). Matches: ${matched.length}.';
+    
     await _safeAddAlert({
       'type': 'freed_slot_matches',
       'title': title,
