@@ -15,7 +15,7 @@ class BookingRequestCard extends StatelessWidget {
     required this.br,
     required this.purple,
     required this.onDelete,
-    required this.onEditNotes,
+    required this.onEditRequest,
     this.availability = BookingRequestAvailability.unknown,
     this.availabilityLabel,
   });
@@ -24,13 +24,12 @@ class BookingRequestCard extends StatelessWidget {
   final Map<String, dynamic> br;
   final Color purple;
   final Future<void> Function() onDelete;
-  final VoidCallback onEditNotes;
+  final VoidCallback onEditRequest;
 
   final BookingRequestAvailability availability;
   final String? availabilityLabel;
 
   String _formatRange(Map<String, dynamic> r) {
-    // soporta startMin/endMin o start/end
     final s = (r['startMin'] ?? r['start']);
     final e = (r['endMin'] ?? r['end']);
     final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
@@ -52,22 +51,26 @@ class BookingRequestCard extends StatelessWidget {
         bg = const Color(0xFFE6F4EA);
         border = const Color(0xFF34A853);
         text = const Color(0xFF137333);
-        label = availabilityLabel ?? "";
+        label = (availabilityLabel ?? '').trim();
+        if (label.isEmpty) label = ' '; // mantiene tamaño
         break;
+
       case BookingRequestAvailability.unavailable:
-        bg = const Color(0xFFFCE8E6); // google red tint
+        bg = const Color(0xFFFCE8E6);
         border = const Color(0xFFEA4335);
         text = const Color(0xFFA50E0E);
-        label = availabilityLabel ?? "No availability";
+        label = (availabilityLabel ?? 'No availability').trim();
+        if (label.isEmpty) label = 'No availability';
         break;
+
       case BookingRequestAvailability.unknown:
         bg = Colors.black.withOpacity(0.05);
         border = Colors.black.withOpacity(0.12);
         text = Colors.black.withOpacity(0.70);
-        label = availabilityLabel ?? "Checking…";
+        label = (availabilityLabel ?? 'Checking…').trim();
+        if (label.isEmpty) label = 'Checking…';
         break;
     }
-    if (label.trim().isEmpty) label = " "; // mantiene tamaño pill y evita que el pill colapse si no hay texto
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -105,7 +108,7 @@ class BookingRequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final days = (br['preferredDays'] as List?) ?? const [];
     final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-    final notes = (br['notes'] ?? '').toString().trim();
+    final proc = (br['serviceNameLabel'] ?? br['serviceNameKey'] ?? '').toString().trim();
     final workerId = br['workerId'] as String?;
 
     return Container(
@@ -128,7 +131,6 @@ class BookingRequestCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // header row: title + pill
                   Row(
                     children: [
                       const Expanded(
@@ -145,6 +147,7 @@ class BookingRequestCard extends StatelessWidget {
                     Text(
                       "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
                     ),
+
                   if (ranges.isNotEmpty)
                     Text(
                       "• Range(s): ${ranges.map((r) {
@@ -152,12 +155,12 @@ class BookingRequestCard extends StatelessWidget {
                         return _formatRange(m);
                       }).join('; ')}",
                     ),
-                  if (notes.isNotEmpty) Text("• Notes: $notes"),
+
+                  if (proc.isNotEmpty) Text("• Procedure: $proc"),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-
             Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -172,8 +175,8 @@ class BookingRequestCard extends StatelessWidget {
                   icon: Icons.edit_outlined,
                   color: purple,
                   shadow: false,
-                  tooltip: "Edit notes",
-                  onTap: onEditNotes,
+                  tooltip: "Edit request",
+                  onTap: onEditRequest,
                 ),
               ],
             ),

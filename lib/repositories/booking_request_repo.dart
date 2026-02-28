@@ -46,6 +46,28 @@ class BookingRequestRepo {
         .map((s) => s.docs);
   }
 
+  Future<void> updateRequest({
+    required String requestId,
+    required String serviceId,
+    required String serviceNameKey,
+    required String serviceNameLabel,
+    required int durationMin,
+    required String? workerId, // null => Any
+    required List<String> preferredDays,
+    required List<Map<String, int>> preferredTimeRanges,
+  }) async {
+    await db.collection('booking_requests').doc(requestId).set({
+      'workerId': workerId, // si null, queda null
+      'serviceId': serviceId,
+      'serviceNameKey': serviceNameKey,
+      'serviceNameLabel': serviceNameLabel,
+      'durationMin': durationMin,
+      'preferredDays': preferredDays,
+      'preferredTimeRanges': preferredTimeRanges,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
       getActiveRequestsForClient(String clientId) async {
     final snap = await _req
@@ -58,11 +80,17 @@ class BookingRequestRepo {
 
   Future<void> upsertRequest({
     required String clientId,
-    String? workerId, // ✅ null => any worker
+    String? workerId, // null => any worker
+
+    // ✅ NEW: procedure
+    required String serviceId,
+    required String serviceNameKey,
+    required String serviceNameLabel,
+    required int durationMin,
+
     required List<Timestamp> exactSlots,
     required List<String> preferredDays,
     required List<Map<String, int>> preferredTimeRanges,
-    required String notes,
   }) async {
     final now = FieldValue.serverTimestamp();
     final doc = _req.doc();
@@ -71,16 +99,24 @@ class BookingRequestRepo {
       tx.set(doc, {
         'clientId': clientId,
 
-        // ✅ SIEMPRE presente (null = any worker)
+        // worker
         'workerId': workerId,
 
+        // ✅ procedure
+        'serviceId': serviceId,
+        'serviceNameKey': serviceNameKey,
+        'serviceNameLabel': serviceNameLabel,
+        'durationMin': durationMin,
+
+        // flags
         'active': true,
         'createdAt': now,
         'updatedAt': now,
+
+        // availability prefs
         'exactSlots': exactSlots,
         'preferredDays': preferredDays,
         'preferredTimeRanges': preferredTimeRanges,
-        'notes': notes,
       });
 
       tx.set(_clientRef(clientId), {

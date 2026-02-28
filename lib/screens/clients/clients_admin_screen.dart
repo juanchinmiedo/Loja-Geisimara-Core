@@ -242,9 +242,9 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   _PanelOpen? _openPanel;
   bool _openAddRequest = false;
 
-  String _notesDraft = '';
-  int _notesResetToken = 0;
   String? _selectedWorkerId; // null => Any
+  String? _selectedServiceId;
+  Map<String, dynamic>? _selectedServiceData;
   DateTime? preferredDay;
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
@@ -373,6 +373,13 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   }
 
   Future<void> _createRequest() async {
+    if (_selectedServiceId == null || _selectedServiceId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select a procedure first")),
+      );
+      return;
+    }
+
     final preferredDays = <String>[];
     if (preferredDay != null) {
       preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!));
@@ -383,13 +390,33 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
       ranges.add(BookingRequestUtils.range(rangeStart!, rangeEnd!));
     }
 
+    // ✅ load service data (durationMin)
+    if (_selectedServiceData == null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('services')
+          .doc(_selectedServiceId!)
+          .get();
+      _selectedServiceData = doc.data();
+    }
+
+    final svc = _selectedServiceData ?? const <String, dynamic>{};
+    final nameKey = (svc['name'] ?? '').toString();
+    final label = nameKey.isNotEmpty ? nameKey : _selectedServiceId!;
+    final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : 30;
+
     await brRepo.upsertRequest(
       workerId: _selectedWorkerId,
       clientId: widget.clientId,
+
+      // ✅ procedure fields
+      serviceId: _selectedServiceId!,
+      serviceNameKey: nameKey,
+      serviceNameLabel: label,
+      durationMin: dur,
+
       exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
-      notes: _notesDraft.trim(),
     );
 
     await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
@@ -401,69 +428,165 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
     setState(() {
       _looking = true;
       _openAddRequest = false;
-      _notesDraft = '';
-      _notesResetToken++;
       preferredDay = null;
       rangeStart = null;
       rangeEnd = null;
       _selectedWorkerId = null;
+
+      _selectedServiceId = null;
+      _selectedServiceData = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking request created")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Booking request created")),
+    );
   }
 
-  Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
-    String draft = (data['notes'] ?? '').toString();
+  Future<void> _editRequestSheet({
+    required String requestId,
+    required Map<String, dynamic> br,
+  }) async {
+    // Prefill
+    String? workerId = (br['workerId'] as String?)?.trim();
+    if (workerId != null && workerId.isEmpty) workerId = null;
 
-    final ok = await showDialog<bool>(
+    String? serviceId = (br['serviceId'] as String?)?.trim();
+    if (serviceId != null && serviceId.isEmpty) serviceId = null;
+
+    DateTime? day;
+    final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    if (days.isNotEmpty) {
+      day = BookingRequestUtils.parseYyyymmdd(days.first);
+    }
+
+    TimeOfDay? start;
+    TimeOfDay? end;
+    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
+    if (ranges.isNotEmpty && ranges.first is Map) {
+      final m = Map<String, dynamic>.from(ranges.first as Map);
+      final s = (m['startMin'] ?? m['start']);
+      final e = (m['endMin'] ?? m['end']);
+      final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
+      final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
+      if (sm >= 0 && em > sm) {
+        start = TimeOfDay(hour: sm ~/ 60, minute: sm % 60);
+        end = TimeOfDay(hour: em ~/ 60, minute: em % 60);
+      }
+    }
+
+    bool saving = false;
+
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
       builder: (ctx) {
+        final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+
         return StatefulBuilder(
-          builder: (ctx, setLocal) => AlertDialog(
-            title: const Text("Edit request"),
-            content: TextFormField(
-              initialValue: draft,
-              minLines: 1,
-              maxLines: 4,
-              onChanged: (v) => setLocal(() => draft = v),
-              decoration: const InputDecoration(
-                labelText: "Notes",
-                border: OutlineInputBorder(),
+          builder: (ctx, setLocal) {
+            Future<void> save() async {
+              if (saving) return;
+
+              if (serviceId == null || serviceId!.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Select a procedure first")),
+                );
+                return;
+              }
+
+              setLocal(() => saving = true);
+
+              try {
+                // Load service info (duration + name)
+                final svcDoc = await FirebaseFirestore.instance.collection('services').doc(serviceId!).get();
+                final svc = svcDoc.data() ?? const <String, dynamic>{};
+
+                final nameKey = (svc['name'] ?? '').toString();
+                final label = nameKey.isNotEmpty ? nameKey : serviceId!;
+                final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : 30;
+
+                final preferredDays = <String>[];
+                if (day != null) preferredDays.add(BookingRequestUtils.yyyymmdd(day!));
+
+                final preferredRanges = <Map<String, int>>[];
+                if (start != null && end != null) {
+                  preferredRanges.add(BookingRequestUtils.range(start!, end!));
+                }
+
+                await brRepo.updateRequest(
+                  requestId: requestId,
+                  workerId: workerId, // null => Any
+                  serviceId: serviceId!,
+                  serviceNameKey: nameKey,
+                  serviceNameLabel: label,
+                  durationMin: dur,
+                  preferredDays: preferredDays,
+                  preferredTimeRanges: preferredRanges,
+                );
+
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Request updated")),
+                );
+              } finally {
+                if (ctx.mounted) setLocal(() => saving = false);
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 16 + bottomInset),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text("Edit request", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      ),
+                      IconButton(
+                        onPressed: saving ? null : () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  BookingRequestCreateForm(
+                    selectedWorkerId: workerId,
+                    onWorkerChanged: (v) => setLocal(() => workerId = v),
+
+                    selectedServiceId: serviceId,
+                    onServiceChanged: (v) => setLocal(() => serviceId = v),
+
+                    preferredDay: day,
+                    rangeStart: start,
+                    rangeEnd: end,
+                    onDayChanged: (d) => setLocal(() => day = d),
+                    onStartChanged: (t) => setLocal(() => start = t),
+                    onEndChanged: (t) => setLocal(() => end = t),
+
+                    onCreate: save,
+                    purple: kPurple,
+                  ),
+
+                  const SizedBox(height: 10),
+                  if (saving)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 6),
+                      child: CircularProgressIndicator(),
+                    ),
+                ],
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  FocusScope.of(ctx).unfocus();
-                  Navigator.pop(ctx, false);
-                },
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: kPurple),
-                onPressed: () {
-                  FocusScope.of(ctx).unfocus();
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text("Save", style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
-
-    if (ok == true) {
-      await brRepo.updateRequestNotes(
-        requestId: requestId,
-        notes: draft.trim(),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Request updated")),
-        );
-      }
-    }
   }
 
   Widget _panelHeader({required String title, required bool open, required VoidCallback onTap}) {
@@ -516,7 +639,7 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
         if (ok != true) return;
         await brRepo.deleteRequest(requestId);
       },
-      onEditNotes: () => _editRequestNotesDialog(requestId, br),
+      onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
     );
   }
   @override
@@ -718,19 +841,35 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
             AppSectionCard(
               title: "New request details",
               child: BookingRequestCreateForm(
-                notesValue: _notesDraft,
-                  onNotesChanged: (v) => setState(() => _notesDraft = v),
-                  notesResetToken: _notesResetToken,
-                  selectedWorkerId: _selectedWorkerId,
-                  onWorkerChanged: (v) => setState(() => _selectedWorkerId = v),
-                  preferredDay: preferredDay,
-                  rangeStart: rangeStart,
-                  rangeEnd: rangeEnd,
-                  onDayChanged: (d) => setState(() => preferredDay = d),
-                  onStartChanged: (t) => setState(() => rangeStart = t),
-                  onEndChanged: (t) => setState(() => rangeEnd = t),
-                  onCreate: _createRequest,
-                  purple: kPurple,
+                selectedWorkerId: _selectedWorkerId,
+                onWorkerChanged: (v) => setState(() => _selectedWorkerId = v),
+
+                selectedServiceId: _selectedServiceId,
+                onServiceChanged: (serviceId) async {
+                  if (serviceId == null || serviceId.isEmpty) {
+                    setState(() {
+                      _selectedServiceId = null;
+                      _selectedServiceData = null;
+                    });
+                    return;
+                  }
+
+                  final doc = await FirebaseFirestore.instance.collection('services').doc(serviceId).get();
+                  setState(() {
+                    _selectedServiceId = serviceId;
+                    _selectedServiceData = doc.data();
+                  });
+                },
+
+                preferredDay: preferredDay,
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd,
+                onDayChanged: (d) => setState(() => preferredDay = d),
+                onStartChanged: (t) => setState(() => rangeStart = t),
+                onEndChanged: (t) => setState(() => rangeEnd = t),
+
+                onCreate: _createRequest,
+                purple: kPurple,
               ),
             ),
           ],

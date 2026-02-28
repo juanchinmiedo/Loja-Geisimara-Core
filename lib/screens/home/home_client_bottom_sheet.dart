@@ -37,13 +37,14 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   bool _creatingRequest = false;
 
-  String _notesDraft = '';
-  int _notesResetToken = 0;
   DateTime? preferredDay;
   TimeOfDay? rangeStart;
   TimeOfDay? rangeEnd;
 
   String? _selectedWorkerId; // null => any worker
+  String? _selectedServiceId;
+  Map<String, dynamic>? _selectedServiceData;
+  int _selectedDurationMin = 30;
 
   static const Color kPurple = Color(0xff721c80);
 
@@ -52,7 +53,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     super.initState();
     brRepo = BookingRequestRepo(FirebaseFirestore.instance);
 
-    // ✅ limpieza automática al abrir (expiradas)
+    // limpieza automática al abrir (expiradas)
     brRepo.pruneExpiredActiveRequests(clientId: widget.clientId);
   }
 
@@ -102,26 +103,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     }
   }
 
-    static const int kDefaultSlotMin = 30; // ✅ puedes ajustar
+  // ===================== Availability helpers =====================
 
   DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
   DateTime _endExclusive(DateTime d) => DateTime(d.year, d.month, d.day).add(const Duration(days: 1));
 
-  int _toMin(DateTime dt) => dt.hour * 60 + dt.minute;
-
-  bool _overlaps(int a0, int a1, int b0, int b1) {
-    final s = a0 > b0 ? a0 : b0;
-    final e = a1 < b1 ? a1 : b1;
-    return e > s;
-  }
-
-  static const int kStepMin = 5; // granularidad del escaneo
-
-  String _fmtHm(int minutes) {
-    final h = (minutes ~/ 60).toString().padLeft(2, '0');
-    final m = (minutes % 60).toString().padLeft(2, '0');
-    return '$h:$m';
-  }
+  static const int kStepMin = 5;
 
   String _fmtDdMm(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
@@ -130,17 +117,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   }
 
   int _requestedDurationMin(Map<String, dynamic> br) {
-    // ✅ por ahora: si en el futuro guardamos durationMin/serviceId en request, lo usa
     final v = br['durationMin'];
     if (v is num) return v.toInt();
-    return 30; // fallback (lo cambiamos cuando metas procedure)
+    return 30;
   }
 
-  int _allowedOverlapMin(int durMin) {
-    // ✅ regla nueva:
-    // si el procedimiento > 60 min, se permite solapamiento máximo 15
-    return (durMin > 60) ? 15 : 0;
-  }
+  int _allowedOverlapMin(int durMin) => (durMin > 60) ? 15 : 0;
 
   int _overlapMin(int a0, int a1, int b0, int b1) {
     final s = a0 > b0 ? a0 : b0;
@@ -176,13 +158,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       final a1 = a0 + adur;
 
       final ov = _overlapMin(startMin, endMin, a0, a1);
-      if (ov > allowedOverlap) return false; // ❌ supera tolerancia
+      if (ov > allowedOverlap) return false;
     }
 
     return true;
   }
 
-  /// ✅ devuelve el primer inicio disponible en ese día (según rangos y tolerancia)
   DateTime? _firstSlotOnDayForWorker({
     required DateTime day,
     required List<Map<String, int>> ranges,
@@ -195,7 +176,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       final rs = r['startMin'] ?? 0;
       final re = r['endMin'] ?? (24 * 60);
 
-      // scan en pasos de 5 min
       for (int s = rs; s + durMin <= re; s += kStepMin) {
         final ok = _slotOkForWorkerWithTolerance(
           day: day,
@@ -215,10 +195,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   List<Map<String, int>> _extractRanges(Map<String, dynamic> br) {
     final raw = (br['preferredTimeRanges'] as List?) ?? const [];
-    if (raw.isEmpty) {
-      // sin rangos => todo el día
-      return const [{'startMin': 0, 'endMin': 24 * 60}];
-    }
+    if (raw.isEmpty) return const [{'startMin': 0, 'endMin': 24 * 60}];
 
     final out = <Map<String, int>>[];
     for (final r in raw) {
@@ -237,7 +214,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     return out;
   }
 
-  /// ✅ calcula si hay hueco para esta request, usando appointments ya cargados
   ({BookingRequestAvailability status, DateTime? nextStart}) _availabilityInfoForRequest({
     required Map<String, dynamic> br,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
@@ -261,12 +237,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       return (status: BookingRequestAvailability.unknown, nextStart: null);
     }
 
-    // ✅ Si worker = Any, por ahora lo marcamos "checking" (lo hacemos exacto cuando carguemos workers)
+    // worker Any: por ahora checking (lo hacemos exacto cuando metas workers list)
     if (isAnyWorker) {
       return (status: BookingRequestAvailability.unknown, nextStart: null);
     }
 
-    // 1) exactSlots: el primer exactSlot que sea aceptable
+    // exact slots
     for (final x in exactSlots) {
       if (x is! Timestamp) continue;
       final dt = x.toDate();
@@ -281,11 +257,10 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         allowedOverlap: allowedOverlap,
         appts: appts,
       );
-
       if (ok) return (status: BookingRequestAvailability.available, nextStart: dt);
     }
 
-    // 2) preferredDays: buscar el primer slot entre los días (en orden)
+    // preferred days
     final parsedDays = preferredDays
         .map((k) => BookingRequestUtils.parseYyyymmdd(k))
         .whereType<DateTime>()
@@ -309,51 +284,55 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     return (status: BookingRequestAvailability.unavailable, nextStart: null);
   }
 
-  String _pillLabelForRequest(Map<String, dynamic> br, BookingRequestAvailability status, DateTime? nextStart) {
+  String _pillLabelForRequest(BookingRequestAvailability status, DateTime? nextStart) {
     if (status == BookingRequestAvailability.unknown) return "Checking…";
     if (status == BookingRequestAvailability.unavailable) return "No availability";
-
-    // ✅ verde: "hh:mm - dd/mm"
     if (nextStart == null) return " ";
 
-    final hm = "${nextStart.hour.toString().padLeft(2, '0')}:${nextStart.minute.toString().padLeft(2, '0')}";
+    final hm =
+        "${nextStart.hour.toString().padLeft(2, '0')}:${nextStart.minute.toString().padLeft(2, '0')}";
     final ddmm = _fmtDdMm(nextStart);
     return "$hm - $ddmm";
   }
-  String _availabilityLabel(Map<String, dynamic> br, BookingRequestAvailability a) {
-    // primera fecha como etiqueta bonita
-    final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
-    final first = days.isNotEmpty ? days.first : '';
-    final ddmmyyyy = first.isNotEmpty ? BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(first) : '';
 
-    switch (a) {
-      case BookingRequestAvailability.available:
-        return ddmmyyyy.isNotEmpty ? "Available ($ddmmyyyy)" : "Available";
-      case BookingRequestAvailability.unavailable:
-        return ddmmyyyy.isNotEmpty ? "No slot ($ddmmyyyy)" : "No availability";
-      case BookingRequestAvailability.unknown:
-        return "Checking…";
-    }
-  }
+  // ===================== Create request =====================
 
   Future<void> _createRequest() async {
-    final preferredDays = <String>[];
-    if (preferredDay != null) {
-      preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!));
+    if (_selectedServiceId == null || _selectedServiceId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select a procedure first")),
+      );
+      return;
     }
+
+    final preferredDays = <String>[];
+    if (preferredDay != null) preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!));
 
     final ranges = <Map<String, int>>[];
     if (rangeStart != null && rangeEnd != null) {
       ranges.add(BookingRequestUtils.range(rangeStart!, rangeEnd!));
     }
 
+    if (_selectedServiceData == null) {
+      final doc = await FirebaseFirestore.instance.collection('services').doc(_selectedServiceId!).get();
+      _selectedServiceData = doc.data();
+    }
+
+    final svc = _selectedServiceData ?? const <String, dynamic>{};
+    final nameKey = (svc['name'] ?? '').toString();
+    final label = nameKey.isNotEmpty ? nameKey : _selectedServiceId!;
+    final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : _selectedDurationMin;
+
     await brRepo.upsertRequest(
       clientId: widget.clientId,
       workerId: _selectedWorkerId,
+      serviceId: _selectedServiceId!,
+      serviceNameKey: nameKey,
+      serviceNameLabel: label,
+      durationMin: dur,
       exactSlots: const [],
       preferredDays: preferredDays,
       preferredTimeRanges: ranges,
-      notes: _notesDraft.trim(),
     );
 
     await FirebaseFirestore.instance.collection('clients').doc(widget.clientId).set({
@@ -364,18 +343,22 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (!mounted) return;
     setState(() {
       _creatingRequest = false;
-      _notesDraft = '';
-      _notesResetToken++; // ✅ limpia el TextFormField
       preferredDay = null;
       rangeStart = null;
       rangeEnd = null;
       _selectedWorkerId = null;
+
+      _selectedServiceId = null;
+      _selectedServiceData = null;
+      _selectedDurationMin = 30;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Booking request created")),
     );
   }
+
+  // ===================== Disable looking =====================
 
   Future<void> _confirmAndDisableLooking() async {
     final docs = await brRepo.getActiveRequestsForClient(widget.clientId);
@@ -432,96 +415,151 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     );
   }
 
-  Future<void> _editRequestNotesDialog(String requestId, Map<String, dynamic> data) async {
-    final ctrl = TextEditingController(text: (data['notes'] ?? '').toString());
+  // ===================== EDIT REQUEST (procedure + worker + day + range) =====================
 
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
+  Future<void> _editRequestSheet({
+    required String requestId,
+    required Map<String, dynamic> br,
+  }) async {
+    String? workerId = (br['workerId'] as String?)?.trim();
+    if (workerId != null && workerId.isEmpty) workerId = null;
 
-          onTap: () => FocusScope.of(ctx).unfocus(),
+    String? serviceId = (br['serviceId'] as String?)?.trim();
+    if (serviceId != null && serviceId.isEmpty) serviceId = null;
 
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            titlePadding: const EdgeInsets.fromLTRB(16, 14, 10, 8),
-            contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            title: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    "Edit request",
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  tooltip: "Close",
-                  onPressed: () {
-                    FocusScope.of(ctx).unfocus();
-                    Navigator.pop(ctx, false);
-                  },
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            content: TextField(
-              controller: ctrl,
-              autofocus: true,
-              minLines: 1,
-              maxLines: 4,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
+    DateTime? day;
+    final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    if (days.isNotEmpty) day = BookingRequestUtils.parseYyyymmdd(days.first);
 
-              // ✅ Esto arregla EXACTAMENTE tu problema:
-              // click fuera del input -> pierde foco -> no se reabre el teclado luego.
-              onTapOutside: (_) => FocusScope.of(ctx).unfocus(),
-
-              decoration: const InputDecoration(
-                labelText: "Notes",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  FocusScope.of(ctx).unfocus();
-                  Navigator.pop(ctx, false);
-                },
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: kPurple),
-                onPressed: () {
-                  FocusScope.of(ctx).unfocus();
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text("Save", style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (ok == true) {
-      await brRepo.updateRequestNotes(
-        requestId: requestId,
-        notes: ctrl.text.trim(),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Request updated")),
-        );
+    TimeOfDay? start;
+    TimeOfDay? end;
+    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
+    if (ranges.isNotEmpty && ranges.first is Map) {
+      final m = Map<String, dynamic>.from(ranges.first as Map);
+      final s = (m['startMin'] ?? m['start']);
+      final e = (m['endMin'] ?? m['end']);
+      final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
+      final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
+      if (sm >= 0 && em > sm) {
+        start = TimeOfDay(hour: sm ~/ 60, minute: sm % 60);
+        end = TimeOfDay(hour: em ~/ 60, minute: em % 60);
       }
     }
 
-    ctrl.dispose();
+    bool saving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Future<void> save() async {
+              if (saving) return;
+
+              if (serviceId == null || serviceId!.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Select a procedure first")),
+                );
+                return;
+              }
+
+              setLocal(() => saving = true);
+              try {
+                final svcDoc =
+                    await FirebaseFirestore.instance.collection('services').doc(serviceId!).get();
+                final svc = svcDoc.data() ?? const <String, dynamic>{};
+
+                final nameKey = (svc['name'] ?? '').toString();
+                final label = nameKey.isNotEmpty ? nameKey : serviceId!;
+                final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : 30;
+
+                final preferredDays = <String>[];
+                if (day != null) preferredDays.add(BookingRequestUtils.yyyymmdd(day!));
+
+                final preferredRanges = <Map<String, int>>[];
+                if (start != null && end != null) {
+                  preferredRanges.add(BookingRequestUtils.range(start!, end!));
+                }
+
+                await brRepo.updateRequest(
+                  requestId: requestId,
+                  workerId: workerId,
+                  serviceId: serviceId!,
+                  serviceNameKey: nameKey,
+                  serviceNameLabel: label,
+                  durationMin: dur,
+                  preferredDays: preferredDays,
+                  preferredTimeRanges: preferredRanges,
+                );
+
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Request updated")),
+                );
+              } finally {
+                if (ctx.mounted) setLocal(() => saving = false);
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 16 + bottomInset),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          "Edit request",
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: saving ? null : () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  BookingRequestCreateForm(
+                    selectedWorkerId: workerId,
+                    onWorkerChanged: (v) => setLocal(() => workerId = v),
+
+                    selectedServiceId: serviceId,
+                    onServiceChanged: (v) => setLocal(() => serviceId = v),
+
+                    preferredDay: day,
+                    rangeStart: start,
+                    rangeEnd: end,
+                    onDayChanged: (d) => setLocal(() => day = d),
+                    onStartChanged: (t) => setLocal(() => start = t),
+                    onEndChanged: (t) => setLocal(() => end = t),
+
+                    onCreate: save,
+                    purple: kPurple,
+                  ),
+
+                  const SizedBox(height: 10),
+                  if (saving) const CircularProgressIndicator(),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
+
+  // ===================== UI: request tile =====================
 
   Widget _requestTile({
     required String requestId,
@@ -529,7 +567,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appointmentsDocs,
   }) {
     final info = _availabilityInfoForRequest(br: br, appts: appointmentsDocs);
-    final label = _pillLabelForRequest(br, info.status, info.nextStart);
+    final label = _pillLabelForRequest(info.status, info.nextStart);
+
     return BookingRequestCard(
       requestId: requestId,
       br: br,
@@ -555,7 +594,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         if (ok != true) return;
         await brRepo.deleteRequest(requestId);
       },
-      onEditNotes: () => _editRequestNotesDialog(requestId, br), // ✅
+      onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
     );
   }
 
@@ -573,8 +612,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       );
     }
 
-    final count = docs.length;
-    final mustScrollInside = count > 2;
+    final mustScrollInside = docs.length > 2;
 
     if (!mustScrollInside) {
       return AppSectionCard(
@@ -681,17 +719,38 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
           AppSectionCard(
             title: "New request details",
             child: BookingRequestCreateForm(
-              notesValue: _notesDraft,
-              onNotesChanged: (v) => setState(() => _notesDraft = v),
-              notesResetToken: _notesResetToken,
               selectedWorkerId: _selectedWorkerId,
               onWorkerChanged: (v) => setState(() => _selectedWorkerId = v),
+
+              selectedServiceId: _selectedServiceId,
+              onServiceChanged: (serviceId) async {
+                if (serviceId == null || serviceId.isEmpty) {
+                  setState(() {
+                    _selectedServiceId = null;
+                    _selectedServiceData = null;
+                    _selectedDurationMin = 30;
+                  });
+                  return;
+                }
+
+                final doc = await FirebaseFirestore.instance.collection('services').doc(serviceId).get();
+                final data = doc.data() ?? const <String, dynamic>{};
+                final dur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 30;
+
+                setState(() {
+                  _selectedServiceId = serviceId;
+                  _selectedServiceData = data;
+                  _selectedDurationMin = dur;
+                });
+              },
+
               preferredDay: preferredDay,
               rangeStart: rangeStart,
               rangeEnd: rangeEnd,
               onDayChanged: (d) => setState(() => preferredDay = d),
               onStartChanged: (t) => setState(() => rangeStart = t),
               onEndChanged: (t) => setState(() => rangeEnd = t),
+
               onCreate: _createRequest,
               purple: kPurple,
             ),
@@ -785,12 +844,10 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final clientStream =
-        FirebaseFirestore.instance.collection('clients').doc(widget.clientId).snapshots();
+    final clientStream = FirebaseFirestore.instance.collection('clients').doc(widget.clientId).snapshots();
 
     final bool wantsRequests = widget.mode == HomeAdminMode.looking;
-    final requestsStream =
-        wantsRequests ? brRepo.streamActiveRequestsForClient(widget.clientId) : null;
+    final requestsStream = wantsRequests ? brRepo.streamActiveRequestsForClient(widget.clientId) : null;
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: clientStream,
@@ -803,9 +860,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         return StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
           stream: requestsStream,
           builder: (context, reqSnap) {
-            final activeDocs = wantsRequests
-                ? (reqSnap.data ?? const [])
-                : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final activeDocs = wantsRequests ? (reqSnap.data ?? const []) : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
             final screenH = MediaQuery.of(context).size.height;
 
             final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
@@ -853,71 +908,63 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                         children: [
                           Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
                           const SizedBox(height: 4),
-                          if (contact.isNotEmpty)
-                            Text(contact, style: TextStyle(color: Colors.grey[700])),
+                          if (contact.isNotEmpty) Text(contact, style: TextStyle(color: Colors.grey[700])),
                         ],
                       ),
                     ),
                     const SizedBox(height: 14),
                     Expanded(
                       child: SingleChildScrollView(
-                        physics: allowOuterScroll
-                            ? const ClampingScrollPhysics()
-                            : const NeverScrollableScrollPhysics(),
+                        physics: allowOuterScroll ? const ClampingScrollPhysics() : const NeverScrollableScrollPhysics(),
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: (widget.mode == HomeAdminMode.looking)
-                            ? Builder(
-                                builder: (_) {
-                                  // ✅ calcula rango min/max de días de las requests
-                                  DateTime? minDay;
-                                  DateTime? maxDay;
+                              ? Builder(
+                                  builder: (_) {
+                                    DateTime? minDay;
+                                    DateTime? maxDay;
 
-                                  for (final d in activeDocs) {
-                                    final br = d.data();
-                                    final days = (br['preferredDays'] as List?)
-                                            ?.map((e) => e.toString())
-                                            .toList() ??
-                                        const <String>[];
-
-                                    for (final dayKey in days) {
-                                      final dt = BookingRequestUtils.parseYyyymmdd(dayKey);
-                                      if (dt == null) continue;
-                                      minDay = (minDay == null || dt.isBefore(minDay!)) ? dt : minDay;
-                                      maxDay = (maxDay == null || dt.isAfter(maxDay!)) ? dt : maxDay;
+                                    for (final d in activeDocs) {
+                                      final br = d.data();
+                                      final days = (br['preferredDays'] as List?)
+                                              ?.map((e) => e.toString())
+                                              .toList() ??
+                                          const <String>[];
+                                      for (final dayKey in days) {
+                                        final dt = BookingRequestUtils.parseYyyymmdd(dayKey);
+                                        if (dt == null) continue;
+                                        minDay = (minDay == null || dt.isBefore(minDay)) ? dt : minDay;
+                                        maxDay = (maxDay == null || dt.isAfter(maxDay)) ? dt : maxDay;
+                                      }
                                     }
-                                  }
 
-                                  // si no hay días, no hacemos stream de appointments
-                                  if (minDay == null || maxDay == null) {
-                                    return _lookingBody(
-                                      client: data,
-                                      activeRequestDocs: activeDocs,
-                                      appointmentsDocs: const [],
-                                    );
-                                  }
-
-                                  final q = FirebaseFirestore.instance
-                                      .collection('appointments')
-                                      .where('appointmentDate',
-                                          isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay!)))
-                                      .where('appointmentDate',
-                                          isLessThan: Timestamp.fromDate(_endExclusive(maxDay!)));
-
-                                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                                    stream: q.snapshots(),
-                                    builder: (context, apptSnap) {
-                                      final apptDocs = apptSnap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                                    if (minDay == null || maxDay == null) {
                                       return _lookingBody(
                                         client: data,
                                         activeRequestDocs: activeDocs,
-                                        appointmentsDocs: apptDocs,
+                                        appointmentsDocs: const [],
                                       );
-                                    },
-                                  );
-                                },
-                              )
-                            : _statsBody(data),
+                                    }
+
+                                    final q = FirebaseFirestore.instance
+                                        .collection('appointments')
+                                        .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay)))
+                                        .where('appointmentDate', isLessThan: Timestamp.fromDate(_endExclusive(maxDay)));
+
+                                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                      stream: q.snapshots(),
+                                      builder: (context, apptSnap) {
+                                        final apptDocs = apptSnap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                                        return _lookingBody(
+                                          client: data,
+                                          activeRequestDocs: activeDocs,
+                                          appointmentsDocs: apptDocs,
+                                        );
+                                      },
+                                    );
+                                  },
+                                )
+                              : _statsBody(data),
                         ),
                       ),
                     ),
