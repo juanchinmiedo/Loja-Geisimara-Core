@@ -1,17 +1,13 @@
+import 'package:salon_app/utils/date_time_utils.dart';
+import 'package:salon_app/utils/string_utils.dart';
+
 class AppointmentUtils {
   static String dayKey(DateTime d) {
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return "$y$m$day";
+    return DateTimeUtils.yyyymmdd(d);
   }
 
   static String slug(String s) {
-    return s
-        .toLowerCase()
-        .trim()
-        .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'[^a-z0-9_]+'), '');
+    return StringUtils.slug(s);
   }
 
   static String buildAppointmentId({

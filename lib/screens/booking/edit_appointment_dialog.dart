@@ -16,6 +16,7 @@ import 'package:salon_app/components/service_type_selectors.dart';
 // ✅ NEW
 import 'package:salon_app/services/appointment_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
 
 class EditAppointmentDialog extends StatefulWidget {
   const EditAppointmentDialog({
@@ -773,12 +774,112 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                           final clientId = (widget.data['clientId'] ?? '').toString().trim();
                           if (clientId.isNotEmpty) {
                             try {
-                              await _brRepo.deleteExistingRequestsBecauseAppointmentWasCreated(
+                              final serviceCategory =
+                                  (selectedServiceData?['category'] ?? 'hands').toString();
+
+                              final plan = await _brRepo.buildDeletePlanForNewAppointment(
                                 clientId: clientId,
-                                appointmentId: widget.appointmentId,
-                                appointmentDate: dt,
-                                serviceName: translatedName,
+                                appointmentStart: dt,
+                                appointmentDurationMin: durationMin,
+                                workerId: (effectiveWorkerId ?? existingWorkerId).toString(),
+                                serviceCategory: serviceCategory,
                               );
+
+                              await _brRepo.deleteRequestsByDocs(
+                                clientId: clientId,
+                                docs: plan.autoDelete,
+                              );
+
+                              if (plan.confirmDelete.isNotEmpty && mounted) {
+                                String rangeLabelFrom(Map<String, dynamic> br) {
+                                  final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
+                                  if (ranges.isEmpty) return 'Any time';
+                                  final parts = <String>[];
+                                  for (final rr in ranges) {
+                                    if (rr is! Map) continue;
+                                    final m = Map<String, dynamic>.from(rr);
+                                    final s = (m['startMin'] ?? m['start']);
+                                    final e = (m['endMin'] ?? m['end']);
+                                    final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
+                                    final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? 0;
+                                    parts.add(
+                                      "${DateTimeUtils.hhmmFromMinutes(sm)}-${DateTimeUtils.hhmmFromMinutes(em)}",
+                                    );
+                                  }
+                                  return parts.join('; ');
+                                }
+
+                                String daysLabelFrom(Map<String, dynamic> br) {
+                                  final days = (br['preferredDays'] as List?) ?? const [];
+                                  if (days.isEmpty) return '—';
+                                  return days
+                                      .map((d) => DateTimeUtils.formatYyyyMmDdToDdMmYyyy(d.toString()))
+                                      .join(', ');
+                                }
+
+                                final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dctx) {
+                                        return AlertDialog(
+                                          title: const Text('Delete booking request(s)?'),
+                                          content: SizedBox(
+                                            width: double.maxFinite,
+                                            child: ListView.separated(
+                                              shrinkWrap: true,
+                                              itemCount: plan.confirmDelete.length,
+                                              separatorBuilder: (_, __) => const Divider(height: 14),
+                                              itemBuilder: (_, i) {
+                                                final doc = plan.confirmDelete[i];
+                                                final br = doc.data();
+                                                final proc = (br['serviceNameLabel'] ??
+                                                        br['serviceNameKey'] ??
+                                                        '')
+                                                    .toString();
+                                                final w = (br['workerId'] ?? '').toString();
+                                                final workerLabel =
+                                                    w.trim().isEmpty ? 'Any' : w;
+                                                return Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      proc.isEmpty ? 'Request' : proc,
+                                                      style: const TextStyle(fontWeight: FontWeight.w900),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text('Worker: $workerLabel'),
+                                                    Text('Day(s): ${daysLabelFrom(br)}'),
+                                                    Text('Range(s): ${rangeLabelFrom(br)}'),
+                                                  ],
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(dctx, false),
+                                              child: const Text('Keep'),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                              onPressed: () => Navigator.pop(dctx, true),
+                                              child: const Text(
+                                                'Delete',
+                                                style: TextStyle(color: Colors.white),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ) ??
+                                    false;
+
+                                if (ok) {
+                                  await _brRepo.deleteRequestsByDocs(
+                                    clientId: clientId,
+                                    docs: plan.confirmDelete,
+                                  );
+                                }
+                              }
                             } catch (_) {}
                           }
 

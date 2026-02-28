@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
 
 enum BookingRequestAvailability { available, unavailable, unknown }
 
@@ -35,9 +36,7 @@ class BookingRequestCard extends StatelessWidget {
     final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
     final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? 0;
 
-    String hm(int m) =>
-        "${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}";
-    return "${hm(sm)} - ${hm(em)}";
+    return "${DateTimeUtils.hhmmFromMinutes(sm)} - ${DateTimeUtils.hhmmFromMinutes(em)}";
   }
 
   Widget _availabilityPill() {

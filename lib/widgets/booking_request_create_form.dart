@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'package:salon_app/components/service_type_selectors.dart';
 
-import 'package:salon_app/widgets/booking_request_pickers_pills.dart';
+import 'package:salon_app/widgets/booking_request_multi_pickers_pills.dart';
 import 'package:salon_app/widgets/worker_choice_pills.dart';
 
 /// Simple create form:
@@ -20,12 +20,12 @@ class BookingRequestCreateForm extends StatelessWidget {
     required this.selectedServiceId,
     required this.onServiceChanged,
 
-    required this.preferredDay,
-    required this.rangeStart,
-    required this.rangeEnd,
-    required this.onDayChanged,
-    required this.onStartChanged,
-    required this.onEndChanged,
+    required this.selectedDays,
+    required this.selectedRanges,
+    required this.onAddDay,
+    required this.onRemoveDayKey,
+    required this.onAddRange,
+    required this.onRemoveRangeAt,
 
     required this.onCreate,
     this.purple = const Color(0xff721c80),
@@ -37,12 +37,12 @@ class BookingRequestCreateForm extends StatelessWidget {
   final String? selectedServiceId;
   final ValueChanged<String?> onServiceChanged;
 
-  final DateTime? preferredDay;
-  final TimeOfDay? rangeStart;
-  final TimeOfDay? rangeEnd;
-  final ValueChanged<DateTime?> onDayChanged;
-  final ValueChanged<TimeOfDay?> onStartChanged;
-  final ValueChanged<TimeOfDay?> onEndChanged;
+  final List<String> selectedDays; // yyyymmdd
+  final List<Map<String, int>> selectedRanges; // {startMin,endMin}
+  final Future<void> Function() onAddDay;
+  final void Function(String dayKey) onRemoveDayKey;
+  final Future<void> Function() onAddRange;
+  final void Function(int index) onRemoveRangeAt;
 
   final VoidCallback onCreate;
   final Color purple;
@@ -97,13 +97,13 @@ class BookingRequestCreateForm extends StatelessWidget {
         ),
 
         const SizedBox(height: 12),
-        BookingRequestPickersPills(
-          preferredDay: preferredDay,
-          rangeStart: rangeStart,
-          rangeEnd: rangeEnd,
-          onDayChanged: onDayChanged,
-          onStartChanged: onStartChanged,
-          onEndChanged: onEndChanged,
+        BookingRequestMultiPickersPills(
+          selectedDays: selectedDays,
+          selectedRanges: selectedRanges,
+          onAddDay: onAddDay,
+          onRemoveDayKey: onRemoveDayKey,
+          onAddRange: onAddRange,
+          onRemoveRangeAt: onRemoveRangeAt,
           purple: purple,
         ),
 

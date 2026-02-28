@@ -1,6 +1,7 @@
 // lib/services/client_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/utils/string_utils.dart';
 
 class ClientService {
   ClientService(this._db);
@@ -50,14 +51,7 @@ class ClientService {
   // ✅ NEW: ID formato first_last_country_phone (+ sufijo si colisiona)
   // ─────────────────────────────────────────────────────────────
 
-  String _slug(String input) {
-    var v = input.trim().toLowerCase();
-    v = v.replaceAll(RegExp(r'\s+'), '_');
-    v = v.replaceAll(RegExp(r'[^a-z0-9_]+'), ''); // simple slug sin paquetes
-    v = v.replaceAll(RegExp(r'_+'), '_');
-    if (v.isEmpty) v = 'x';
-    return v;
-  }
+  String _slug(String input) => StringUtils.slug(input, emptyFallback: 'x');
 
   String _buildBaseClientId({
     required String firstName,

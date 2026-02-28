@@ -37,9 +37,9 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   bool _creatingRequest = false;
 
-  DateTime? preferredDay;
-  TimeOfDay? rangeStart;
-  TimeOfDay? rangeEnd;
+  // NEW: multi-day + multi-range
+  final List<String> _selectedDayKeys = <String>[]; // yyyymmdd
+  final List<Map<String, int>> _selectedRanges = <Map<String, int>>[]; // {startMin,endMin}
 
   String? _selectedWorkerId; // null => any worker
   String? _selectedServiceId;
@@ -47,6 +47,76 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   int _selectedDurationMin = 30;
 
   static const Color kPurple = Color(0xff721c80);
+
+  // límites
+  static const int _startMinClamp = 7 * 60 + 30;
+  static const int _startMaxClamp = 19 * 60;
+  static const int _endMinClamp = 9 * 60;
+  static const int _endMaxClamp = 21 * 60;
+
+  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  TimeOfDay _fromMin(int minutes) {
+    final h = (minutes ~/ 60).clamp(0, 23);
+    final m = (minutes % 60).clamp(0, 59);
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
+    final v = _toMin(t);
+    final clamped = v.clamp(min, max);
+    return _fromMin(clamped);
+  }
+
+  Future<void> _addDay() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: today,
+      lastDate: DateTime(now.year + 2),
+      initialDate: today,
+    );
+    if (picked == null) return;
+    final key = BookingRequestUtils.yyyymmdd(picked);
+    setState(() {
+      if (!_selectedDayKeys.contains(key)) _selectedDayKeys.add(key);
+      _selectedDayKeys.sort();
+    });
+  }
+
+  void _removeDayKey(String key) {
+    setState(() => _selectedDayKeys.remove(key));
+  }
+
+  Future<void> _addRange() async {
+    final start = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (start == null) return;
+    final fixedStart = _clampTime(start, _startMinClamp, _startMaxClamp);
+
+    final minAllowed = (_toMin(fixedStart) < _endMinClamp) ? _endMinClamp : _toMin(fixedStart);
+    final end = await showTimePicker(
+      context: context,
+      initialTime: _fromMin(minAllowed),
+    );
+    if (end == null) return;
+    var fixedEnd = _clampTime(end, _endMinClamp, _endMaxClamp);
+    if (_toMin(fixedEnd) < _toMin(fixedStart)) {
+      fixedEnd = _clampTime(fixedStart, _endMinClamp, _endMaxClamp);
+    }
+
+    setState(() {
+      _selectedRanges.add(BookingRequestUtils.range(fixedStart, fixedEnd));
+    });
+  }
+
+  void _removeRangeAt(int i) {
+    if (i < 0 || i >= _selectedRanges.length) return;
+    setState(() => _selectedRanges.removeAt(i));
+  }
 
   @override
   void initState() {
@@ -305,13 +375,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       return;
     }
 
-    final preferredDays = <String>[];
-    if (preferredDay != null) preferredDays.add(BookingRequestUtils.yyyymmdd(preferredDay!));
-
-    final ranges = <Map<String, int>>[];
-    if (rangeStart != null && rangeEnd != null) {
-      ranges.add(BookingRequestUtils.range(rangeStart!, rangeEnd!));
-    }
+    final preferredDays = List<String>.from(_selectedDayKeys);
+    final ranges = List<Map<String, int>>.from(_selectedRanges);
 
     if (_selectedServiceData == null) {
       final doc = await FirebaseFirestore.instance.collection('services').doc(_selectedServiceId!).get();
@@ -322,6 +387,54 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final nameKey = (svc['name'] ?? '').toString();
     final label = nameKey.isNotEmpty ? nameKey : _selectedServiceId!;
     final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : _selectedDurationMin;
+
+    // ✅ NEW: si ya existe un appointment FUTURO de la misma category, pedir confirmación
+    final selectedCategory = (svc['category'] ?? 'hands').toString();
+    try {
+      final now = Timestamp.now();
+      final apptsSnap = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('clientId', isEqualTo: widget.clientId)
+          .where('status', isEqualTo: 'scheduled')
+          .where('appointmentDate', isGreaterThanOrEqualTo: now)
+          .limit(20)
+          .get();
+
+      bool hasSameCategory = false;
+      final cache = <String, String>{};
+      for (final a in apptsSnap.docs) {
+        final sid = (a.data()['serviceId'] ?? '').toString();
+        if (sid.isEmpty) continue;
+        final cat = cache[sid] ??
+            ((await FirebaseFirestore.instance.collection('services').doc(sid).get()).data()?['category'] ?? 'hands')
+                .toString();
+        cache[sid] = cat;
+        if (cat == selectedCategory) {
+          hasSameCategory = true;
+          break;
+        }
+      }
+
+      if (hasSameCategory) {
+        final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) {
+                return AlertDialog(
+                  title: const Text('Appointment already exists'),
+                  content: Text(
+                    "This client already has a scheduled appointment for category '$selectedCategory'. Create a booking request anyway?",
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+                  ],
+                );
+              },
+            ) ??
+            false;
+        if (!ok) return;
+      }
+    } catch (_) {}
 
     await brRepo.upsertRequest(
       clientId: widget.clientId,
@@ -343,9 +456,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (!mounted) return;
     setState(() {
       _creatingRequest = false;
-      preferredDay = null;
-      rangeStart = null;
-      rangeEnd = null;
+      _selectedDayKeys.clear();
+      _selectedRanges.clear();
       _selectedWorkerId = null;
 
       _selectedServiceId = null;
@@ -427,22 +539,23 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     String? serviceId = (br['serviceId'] as String?)?.trim();
     if (serviceId != null && serviceId.isEmpty) serviceId = null;
 
-    DateTime? day;
-    final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
-    if (days.isNotEmpty) day = BookingRequestUtils.parseYyyymmdd(days.first);
+    final dayKeys = (br['preferredDays'] as List?)
+            ?.map((e) => e.toString())
+            .where((e) => e.trim().isNotEmpty)
+            .toList() ??
+        <String>[];
 
-    TimeOfDay? start;
-    TimeOfDay? end;
-    final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-    if (ranges.isNotEmpty && ranges.first is Map) {
-      final m = Map<String, dynamic>.from(ranges.first as Map);
+    final rangeList = <Map<String, int>>[];
+    final rawRanges = (br['preferredTimeRanges'] as List?) ?? const [];
+    for (final rr in rawRanges) {
+      if (rr is! Map) continue;
+      final m = Map<String, dynamic>.from(rr);
       final s = (m['startMin'] ?? m['start']);
       final e = (m['endMin'] ?? m['end']);
       final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
       final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
       if (sm >= 0 && em > sm) {
-        start = TimeOfDay(hour: sm ~/ 60, minute: sm % 60);
-        end = TimeOfDay(hour: em ~/ 60, minute: em % 60);
+        rangeList.add({'startMin': sm, 'endMin': em});
       }
     }
 
@@ -480,13 +593,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                 final label = nameKey.isNotEmpty ? nameKey : serviceId!;
                 final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : 30;
 
-                final preferredDays = <String>[];
-                if (day != null) preferredDays.add(BookingRequestUtils.yyyymmdd(day!));
-
-                final preferredRanges = <Map<String, int>>[];
-                if (start != null && end != null) {
-                  preferredRanges.add(BookingRequestUtils.range(start!, end!));
-                }
+                final preferredDays = List<String>.from(dayKeys);
+                final preferredRanges = List<Map<String, int>>.from(rangeList);
 
                 await brRepo.updateRequest(
                   requestId: requestId,
@@ -537,12 +645,45 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     selectedServiceId: serviceId,
                     onServiceChanged: (v) => setLocal(() => serviceId = v),
 
-                    preferredDay: day,
-                    rangeStart: start,
-                    rangeEnd: end,
-                    onDayChanged: (d) => setLocal(() => day = d),
-                    onStartChanged: (t) => setLocal(() => start = t),
-                    onEndChanged: (t) => setLocal(() => end = t),
+                    selectedDays: dayKeys,
+                    selectedRanges: rangeList,
+                    onAddDay: () async {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        firstDate: today,
+                        lastDate: DateTime(now.year + 2),
+                        initialDate: today,
+                      );
+                      if (picked == null) return;
+                      final key = BookingRequestUtils.yyyymmdd(picked);
+                      setLocal(() {
+                        if (!dayKeys.contains(key)) dayKeys.add(key);
+                        dayKeys.sort();
+                      });
+                    },
+                    onRemoveDayKey: (k) => setLocal(() => dayKeys.remove(k)),
+                    onAddRange: () async {
+                      final start = await showTimePicker(
+                        context: ctx,
+                        initialTime: const TimeOfDay(hour: 9, minute: 0),
+                      );
+                      if (start == null) return;
+                      final sMin = start.hour * 60 + start.minute;
+                      final end = await showTimePicker(
+                        context: ctx,
+                        initialTime: TimeOfDay(hour: (sMin ~/ 60).clamp(0, 23), minute: (sMin % 60).clamp(0, 59)),
+                      );
+                      if (end == null) return;
+                      final eMin = end.hour * 60 + end.minute;
+                      if (eMin <= sMin) return;
+                      setLocal(() => rangeList.add({'startMin': sMin, 'endMin': eMin}));
+                    },
+                    onRemoveRangeAt: (i) {
+                      if (i < 0 || i >= rangeList.length) return;
+                      setLocal(() => rangeList.removeAt(i));
+                    },
 
                     onCreate: save,
                     purple: kPurple,
@@ -744,12 +885,12 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                 });
               },
 
-              preferredDay: preferredDay,
-              rangeStart: rangeStart,
-              rangeEnd: rangeEnd,
-              onDayChanged: (d) => setState(() => preferredDay = d),
-              onStartChanged: (t) => setState(() => rangeStart = t),
-              onEndChanged: (t) => setState(() => rangeEnd = t),
+              selectedDays: _selectedDayKeys,
+              selectedRanges: _selectedRanges,
+              onAddDay: _addDay,
+              onRemoveDayKey: _removeDayKey,
+              onAddRange: _addRange,
+              onRemoveRangeAt: _removeRangeAt,
 
               onCreate: _createRequest,
               purple: kPurple,

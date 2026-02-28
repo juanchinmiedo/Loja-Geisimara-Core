@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
+import 'package:salon_app/utils/string_utils.dart';
 
 class BookingRequestUtils {
   static DateTime roundTo5Min(DateTime dt) {
@@ -17,20 +19,11 @@ class BookingRequestUtils {
   }
 
   static String yyyymmdd(DateTime dt) {
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return "$y$m$d";
+    return DateTimeUtils.yyyymmdd(dt);
   }
 
   static DateTime? parseYyyymmdd(String s) {
-    final clean = s.trim();
-    if (clean.length != 8) return null;
-    final y = int.tryParse(clean.substring(0, 4));
-    final m = int.tryParse(clean.substring(4, 6));
-    final d = int.tryParse(clean.substring(6, 8));
-    if (y == null || m == null || d == null) return null;
-    return DateTime(y, m, d);
+    return DateTimeUtils.parseYyyymmdd(s);
   }
 
   static int minutesFromMidnight(TimeOfDay t) => t.hour * 60 + t.minute;
@@ -51,26 +44,7 @@ class BookingRequestUtils {
 
   /// slug simple: lower, quita espacios raros, deja a-z0-9 y _
   static String slug(String input) {
-    var s = input.trim().toLowerCase();
-
-    const map = {
-      'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a',
-      'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
-      'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
-      'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o',
-      'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
-      'ñ': 'n', 'ç': 'c',
-    };
-    map.forEach((k, v) => s = s.replaceAll(k, v));
-
-    s = s.replaceAll(RegExp(r'\s+'), '_');
-    s = s.replaceAll('-', '_');
-    s = s.replaceAll(RegExp(r'[^a-z0-9_]+'), '');
-    s = s.replaceAll(RegExp(r'_+'), '_');
-    s = s.replaceAll(RegExp(r'^_+'), '');
-    s = s.replaceAll(RegExp(r'_+$'), '');
-
-    return s.isEmpty ? 'unknown' : s;
+    return StringUtils.slug(input);
   }
 
   static String appointmentBaseId({
@@ -102,11 +76,7 @@ class BookingRequestUtils {
   }
 
   static String formatYyyyMmDdToDdMmYyyy(String yyyymmdd) {
-    if (yyyymmdd.length != 8) return yyyymmdd;
-    final y = yyyymmdd.substring(0, 4);
-    final m = yyyymmdd.substring(4, 6);
-    final d = yyyymmdd.substring(6, 8);
-    return "$d/$m/$y";
+    return DateTimeUtils.formatYyyyMmDdToDdMmYyyy(yyyymmdd);
   }
 
   static String bookingRequestBaseId({

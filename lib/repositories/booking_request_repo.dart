@@ -1,5 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
+
+class BookingRequestDeletePlan {
+  BookingRequestDeletePlan({
+    required this.autoDelete,
+    required this.confirmDelete,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> autoDelete;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> confirmDelete;
+}
 
 class BookingRequestRepo {
   BookingRequestRepo(this.db);
@@ -188,65 +199,141 @@ class BookingRequestRepo {
     await batch.commit();
   }
 
-  /// ✅ Cuando se crea un appointment para un cliente:
-  /// - Si YA existían booking requests activas de ese cliente, se borran.
-  /// - Si NO existían, no toca nada.
-  /// - Siempre deja al cliente libre para crear requests nuevas después.
-  /// - Crea una notificación estética en /clients/__system__/history.
-    Future<int> deleteExistingRequestsBecauseAppointmentWasCreated({
-      required String clientId,
-      required String appointmentId,
-      DateTime? appointmentDate,
-      String? serviceName,
-    }) async {
-      final cid = clientId.trim();
+  /// ✅ Cuando se crea/edita un appointment para un cliente:
+  /// - Solo borra automáticamente los requests que **cumplen todos** los requisitos del request
+  ///   para ese appointment (día + rango/exactSlot + worker + category).
+  /// - Los demás requests (misma category) se devuelven como "confirmDelete" para UI.
+  Future<BookingRequestDeletePlan> buildDeletePlanForNewAppointment({
+    required String clientId,
+    required DateTime appointmentStart,
+    required int appointmentDurationMin,
+    required String workerId,
+    required String serviceCategory, // hands | feet
+  }) async {
+    final cid = clientId.trim();
+    final snap = await _req
+        .where('clientId', isEqualTo: cid)
+        .where('active', isEqualTo: true)
+        .get();
 
-      // 1) buscar activas
-      final snap = await _req
-          .where('clientId', isEqualTo: cid)
-          .where('active', isEqualTo: true)
-          .get();
+    if (snap.docs.isEmpty) {
+      return BookingRequestDeletePlan(autoDelete: const [], confirmDelete: const []);
+    }
 
-      if (snap.docs.isEmpty) return 0;
+    final apptDayKey = DateTimeUtils.yyyymmdd(appointmentStart);
+    final apptStartMin = appointmentStart.hour * 60 + appointmentStart.minute;
+    final apptEndMin = apptStartMin + appointmentDurationMin;
 
-      // 2) borrar en batch (solo deletes + update client)
-      final batch = db.batch();
-      for (final d in snap.docs) {
-        batch.delete(d.reference);
+    bool overlaps(int a0, int a1, int b0, int b1) {
+      final s = a0 > b0 ? a0 : b0;
+      final e = a1 < b1 ? a1 : b1;
+      return e > s;
+    }
+
+    final catCache = <String, String>{};
+
+    Future<String> _categoryForServiceId(String sid) async {
+      if (catCache.containsKey(sid)) return catCache[sid]!;
+      try {
+        final doc = await db.collection('services').doc(sid).get();
+        final cat = (doc.data()?['category'] ?? 'hands').toString();
+        catCache[sid] = cat;
+        return cat;
+      } catch (_) {
+        catCache[sid] = 'hands';
+        return 'hands';
+      }
+    }
+
+    bool _workerOk(String? reqWorkerId) {
+      if (reqWorkerId == null || reqWorkerId.trim().isEmpty) return true;
+      return reqWorkerId.trim() == workerId;
+    }
+
+    bool _timeOk(Map<String, dynamic> br) {
+      final exactSlots = (br['exactSlots'] as List?) ?? const [];
+      final preferredDays = (br['preferredDays'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const <String>[];
+      final rangesRaw = (br['preferredTimeRanges'] as List?) ?? const [];
+
+      if (exactSlots.isNotEmpty) {
+        for (final x in exactSlots) {
+          if (x is! Timestamp) continue;
+          final dt = x.toDate();
+          if (DateTimeUtils.yyyymmdd(dt) != apptDayKey) continue;
+          final m = dt.hour * 60 + dt.minute;
+          if ((m - apptStartMin).abs() <= 5) return true;
+        }
+        return false;
       }
 
-      batch.set(
-        _clientRef(cid),
-        {
-          'bookingRequestActive': false,
-          'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      if (!preferredDays.contains(apptDayKey)) return false;
+      if (rangesRaw.isEmpty) return true;
 
-      await batch.commit(); // ✅ esto ya no depende de notificaciones
-
-      // 3) notificación aparte (si falla, no afecta al delete)
-      final when = appointmentDate;
-      final title = 'Booking request removed';
-      final whenStr = when == null ? null : BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(BookingRequestUtils.yyyymmdd(when));
-      
-      final body =
-        'Deleted ${snap.docs.length} request(s) because an appointment was created'
-        '${serviceName != null && serviceName.trim().isNotEmpty ? ' ($serviceName)' : ''}'
-        '${whenStr != null ? ' for $whenStr' : ''}.';
-
-      await _safeAddAlert({
-        'type': 'booking_request_removed_by_appointment',
-        'clientId': cid,
-        'appointmentId': appointmentId,
-        'title': title,
-        'body': body,
-      });
-
-      return snap.docs.length;
+      for (final r in rangesRaw) {
+        if (r is! Map) continue;
+        final mm = Map<String, dynamic>.from(r);
+        final s = (mm['startMin'] ?? mm['start']);
+        final e = (mm['endMin'] ?? mm['end']);
+        final rs = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
+        final re = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
+        if (rs < 0 || re <= rs) continue;
+        if (overlaps(apptStartMin, apptEndMin, rs, re)) return true;
+      }
+      return false;
     }
+
+    final autoDelete = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    final confirmDelete = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+    for (final d in snap.docs) {
+      final br = d.data();
+      final sid = (br['serviceId'] ?? '').toString();
+      if (sid.isEmpty) continue;
+
+      final cat = await _categoryForServiceId(sid);
+      if (cat != serviceCategory) continue;
+
+      final reqWorkerId = (br['workerId'] as String?)?.trim();
+      final ok = _workerOk(reqWorkerId) && _timeOk(br);
+
+      if (ok) {
+        autoDelete.add(d);
+      } else {
+        confirmDelete.add(d);
+      }
+    }
+
+    return BookingRequestDeletePlan(autoDelete: autoDelete, confirmDelete: confirmDelete);
+  }
+
+  Future<int> deleteRequestsByDocs({
+    required String clientId,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  }) async {
+    if (docs.isEmpty) return 0;
+    final cid = clientId.trim();
+
+    final batch = db.batch();
+    for (final d in docs) {
+      batch.delete(d.reference);
+    }
+    await batch.commit();
+
+    final rest = await _req
+        .where('clientId', isEqualTo: cid)
+        .where('active', isEqualTo: true)
+        .get();
+    await _clientRef(cid).set({
+      'bookingRequestActive': rest.docs.isNotEmpty,
+      'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    return docs.length;
+  }
   /// ✅ Cuando un appointment se mueve / cancela / se borra, puede quedar un hueco libre.
   /// Esta función revisa booking requests activas y crea una notificación con "matches".
   ///
