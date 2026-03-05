@@ -19,6 +19,7 @@ import 'package:salon_app/widgets/async_optimistic_switch.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 
 import 'package:salon_app/utils/booking_request_utils.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
 
 import 'package:salon_app/services/client_service.dart';
 
@@ -480,28 +481,40 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
           .get();
 
       bool hasSameCategory = false;
+      DateTime? firstSameCategory;
       final cache = <String, String>{};
+
       for (final a in apptsSnap.docs) {
-        final sid = (a.data()['serviceId'] ?? '').toString();
+        final ad = a.data();
+        final sid = (ad['serviceId'] ?? '').toString();
         if (sid.isEmpty) continue;
+
         final cat = cache[sid] ??
             ((await FirebaseFirestore.instance.collection('services').doc(sid).get()).data()?['category'] ?? 'hands')
                 .toString();
         cache[sid] = cat;
-        if (cat == selectedCategory) {
-          hasSameCategory = true;
-          break;
+
+        if (cat != selectedCategory) continue;
+
+        final ts = ad['appointmentDate'];
+        if (ts is Timestamp) {
+          final dt = ts.toDate();
+          if (firstSameCategory == null || dt.isBefore(firstSameCategory)) {
+            firstSameCategory = dt;
+          }
         }
+
+        hasSameCategory = true;
       }
 
-      if (hasSameCategory) {
+if (hasSameCategory) {
         final ok = await showDialog<bool>(
               context: context,
               builder: (ctx) {
                 return AlertDialog(
                   title: const Text('Appointment already exists'),
                   content: Text(
-                    "This client already has a scheduled appointment for category '$selectedCategory'. Create a booking request anyway?",
+                    "This client already has a scheduled appointment for category '$selectedCategory'" + (firstSameCategory == null ? '' : " (" + DateTimeUtils.hhmmFromMinutes(firstSameCategory.hour * 60 + firstSameCategory.minute) + ' - ' + DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(firstSameCategory)) + ")") + ". Create a booking request anyway?",
                   ),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -620,6 +633,24 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
 
                 final preferredDays = List<String>.from(dayKeys);
                 final preferredRanges = List<Map<String, int>>.from(rangeList);
+
+                // ✅ Validación: cada intervalo debe ser >= duración del procedimiento
+                for (final r in preferredRanges) {
+                  final rs = r['startMin'] ?? 0;
+                  final re = r['endMin'] ?? (24 * 60);
+                  if (re - rs < dur) {
+                    final startLabel = DateTimeUtils.hhmmFromMinutes(rs);
+                    final endLabel = DateTimeUtils.hhmmFromMinutes(re);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "Time range $startLabel-$endLabel is shorter than the procedure duration (${dur}min). Please widen the range.",
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                }
 
                 await brRepo.updateRequest(
                   requestId: requestId,

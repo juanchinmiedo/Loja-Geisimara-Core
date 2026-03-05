@@ -86,13 +86,6 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   late final AppointmentService _apptService;
   late final BookingRequestRepo _brRepo;
 
-  // Cerrar teclado
-  Future<void> _closeKeyboard() async {
-    FocusManager.instance.primaryFocus?.unfocus(); // más fuerte que FocusScope
-    await Future.delayed(const Duration(milliseconds: 50));
-    await SystemChannels.textInput.invokeMethod('TextInput.hide');
-  }
-
   // Service + type
   String? selectedServiceId;
   Map<String, dynamic>? selectedServiceData;
@@ -110,7 +103,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   String? _timeError;
 
   bool _isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   // ✅ pulso lento
   late final AnimationController _pulseCtrl;
@@ -120,13 +113,48 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
 
   void _unfocus() => FocusScope.of(context).unfocus();
 
+  // =========================
+  // ⏱️ BUSINESS HOURS (NEW)
+  // =========================
+  static const int _kMinStartMin = 7 * 60; // 07:00
+  static const int _kMaxEndMin = 21 * 60; // 21:00
+
+  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  TimeOfDay _fromMin(int m) {
+    final mm = m.clamp(0, 24 * 60 - 1);
+    return TimeOfDay(hour: mm ~/ 60, minute: mm % 60);
+  }
+
+  /// Clamp:
+  /// - start >= 07:00
+  /// - end <= 21:00 (shift start back if needed)
+  TimeOfDay _clampStartToBusinessHours(TimeOfDay picked, int durationMin) {
+    int start = _toMin(picked);
+
+    if (start < _kMinStartMin) start = _kMinStartMin;
+
+    int latestStart = _kMaxEndMin - durationMin;
+    if (latestStart < _kMinStartMin) latestStart = _kMinStartMin;
+
+    if (start > latestStart) start = latestStart;
+
+    return _fromMin(start);
+  }
+
+  // Cerrar teclado
+  Future<void> _closeKeyboard() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 50));
+    await SystemChannels.textInput.invokeMethod('TextInput.hide');
+  }
+
   @override
   void initState() {
     super.initState();
 
     if (widget.initialStartTime != null) {
       selectedTime = widget.initialStartTime;
-      // opcional: limpia error si lo tenías por no haber hora
       _timeError = null;
     }
 
@@ -251,7 +279,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
         final m = d.data();
         return {
           ...m,
-          '_id': d.id, // id doc
+          '_id': d.id,
         };
       }).toList(growable: false);
 
@@ -290,7 +318,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
         selectedTypeId = (common['_id'] ?? '').toString();
         selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         serviceTypes = const [];
@@ -330,7 +358,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SUGGESTIONS BOX (solo añadí unfocus al tap)
+  // SUGGESTIONS BOX
   // ─────────────────────────────────────────────────────────────
   Widget _buildSuggestionsBox(List<QueryDocumentSnapshot<Map<String, dynamic>>> filtered) {
     final screenH = MediaQuery.of(context).size.height;
@@ -370,7 +398,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                   seeking: ClientCard.isSeeking(data),
                   showChevron: false,
                   onTap: () {
-                    _unfocus(); // ✅ quita foco del input
+                    _unfocus();
                     _loadClient(d.id);
                   },
                 ),
@@ -401,7 +429,6 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-
       title: Row(
         children: [
           Expanded(
@@ -419,12 +446,11 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
           ),
         ],
       ),
-
       content: SizedBox(
         width: maxDialogWidth,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onTap: _unfocus, // ✅ tap fuera -> cierra teclado
+          onTap: _unfocus,
           child: SingleChildScrollView(
             child: Form(
               key: _formKey,
@@ -444,7 +470,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
                             onTap: () {
-                              _unfocus(); // ✅
+                              _unfocus();
                               setState(() {
                                 existingClientMode = true;
                                 firstNameCtrl.clear();
@@ -458,8 +484,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                color:
-                                    existingClientMode ? const Color(0xff721c80) : Colors.transparent,
+                                color: existingClientMode ? const Color(0xff721c80) : Colors.transparent,
                               ),
                               child: Center(
                                 child: Text(
@@ -479,7 +504,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
                             onTap: () {
-                              _unfocus(); // ✅
+                              _unfocus();
                               setState(() {
                                 existingClientMode = false;
                                 selectedClientId = '';
@@ -491,8 +516,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                color:
-                                    !existingClientMode ? const Color(0xff721c80) : Colors.transparent,
+                                color: !existingClientMode ? const Color(0xff721c80) : Colors.transparent,
                               ),
                               child: Center(
                                 child: Text(
@@ -569,8 +593,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       controller: firstNameCtrl,
                       focusNode: firstNameFocus,
                       textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) =>
-                          FocusScope.of(context).requestFocus(lastNameFocus),
+                      onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(lastNameFocus),
                       decoration: InputDecoration(
                         labelText: s.firstNameLabel,
                         border: const OutlineInputBorder(),
@@ -582,8 +605,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       controller: lastNameCtrl,
                       focusNode: lastNameFocus,
                       textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) =>
-                          FocusScope.of(context).requestFocus(countryFocus),
+                      onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(countryFocus),
                       decoration: InputDecoration(
                         labelText: s.lastNameLabel,
                         border: const OutlineInputBorder(),
@@ -600,8 +622,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                             focusNode: countryFocus,
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.next,
-                            onFieldSubmitted: (_) =>
-                                FocusScope.of(context).requestFocus(phoneFocus),
+                            onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(phoneFocus),
                             decoration: InputDecoration(
                               labelText: s.countryLabel,
                               border: const OutlineInputBorder(),
@@ -617,8 +638,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                             focusNode: phoneFocus,
                             keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.next,
-                            onFieldSubmitted: (_) =>
-                                FocusScope.of(context).requestFocus(instagramFocus),
+                            onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(instagramFocus),
                             decoration: InputDecoration(
                               labelText: s.phoneLabel,
                               border: const OutlineInputBorder(),
@@ -655,7 +675,6 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       selectedServiceId: selectedServiceId,
                       selectedServiceData: selectedServiceData,
                       onPickService: (serviceId, serviceData) async {
-                        // aquí puede quedarse como estaba, pero mejor:
                         await _closeKeyboard();
 
                         setState(() {
@@ -690,7 +709,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
 
                   const SizedBox(height: 12),
 
-                  // TIME (dial + snap 5m)
+                  // TIME (dial + snap 5m) + ✅ BUSINESS HOURS CLAMP
                   InkWell(
                     onTapDown: (_) {
                       FocusManager.instance.primaryFocus?.unfocus();
@@ -712,16 +731,13 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       );
 
                       if (picked != null && mounted) {
-                        setState(() {
-                          selectedTime = picked;
-                          _timeError = null;
-                        });
-                      }
+                        final dur = _finalMinutesSmart(selectedServiceData, selectedType);
+                        final durMin = dur > 0 ? dur : 30;
+                        final adjusted = _clampStartToBusinessHours(picked, durMin);
 
-                      if (picked != null && mounted) {
                         setState(() {
-                          selectedTime = picked;
-                          _timeError = null; // ✅ limpia error rojo
+                          selectedTime = adjusted;
+                          _timeError = null;
                         });
                       }
                     },
@@ -808,7 +824,6 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
           ),
         ),
       ),
-
       actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       actions: [
         SizedBox(
@@ -822,345 +837,344 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: saving
-                  ? null
-                  : () async {
-                      _unfocus(); // ✅ antes de validar/guardar
-                      final ok = _formKey.currentState?.validate() == true;
-                      if (!ok) return;
+                    ? null
+                    : () async {
+                        _unfocus();
+                        final ok = _formKey.currentState?.validate() == true;
+                        if (!ok) return;
 
-                      if (selectedTime == null) {
-                        setState(() {
-                          _timeError = s.timeRequired; // ✅ texto rojo dentro del dialog
-                        });
-                        _pulseTime(); // ✅ ya lo tienes, ayuda a llamar la atención
-                        return;
-                      }
+                        if (selectedTime == null) {
+                          setState(() {
+                            _timeError = s.timeRequired;
+                          });
+                          _pulseTime();
+                          return;
+                        }
 
-                      if (selectedServiceId == null || selectedServiceData == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(s.procedureRequired)),
-                        );
-                        return;
-                      }
-
-                      if (_hasLoadedTypes() && (selectedType == null || selectedTypeId.isEmpty)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(s.typeRequired)),
-                        );
-                        return;
-                      }
-
-                      if (existingClientMode) {
-                        if (selectedClientData == null || selectedClientId.isEmpty) {
+                        if (selectedServiceId == null || selectedServiceData == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.selectExistingClient)),
+                            SnackBar(content: Text(s.procedureRequired)),
                           );
                           return;
                         }
-                      } else {
-                        final country = _parseInt(countryCtrl.text);
-                        final phone = _parseInt(phoneCtrl.text);
-                        final ig = widget.clientService.normalizeInstagram(instagramCtrl.text);
 
-                        final hasPhone = country > 0 && phone > 0;
-                        if (!hasPhone && ig.isEmpty) {
+                        if (_hasLoadedTypes() && (selectedType == null || selectedTypeId.isEmpty)) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(s.phoneOrInstagramRequired)),
+                            SnackBar(content: Text(s.typeRequired)),
                           );
                           return;
                         }
-                      }
-
-                      setState(() => saving = true);
-
-                      try {
-                        // ✅ construir dt + snap PRO (:00 / :30) SOLO si viene de Week
-                        final isFromWeek = widget.initialStartTime != null;
-
-                        int h = selectedTime!.hour;
-                        int m = selectedTime!.minute;
-
-                        if (isFromWeek) {
-                          if (m < 15) {
-                            m = 0;
-                          } else if (m < 45) {
-                            m = 30;
-                          } else {
-                            // 45-59 => siguiente hora en :00
-                            m = 0;
-                            h = h + 1;
-                          }
-                        }
-
-                        DateTime dt = DateTime(
-                          widget.selectedDay.year,
-                          widget.selectedDay.month,
-                          widget.selectedDay.day,
-                          h,
-                          m,
-                        );
-
-                        // ✅ si al subir hora nos pasamos al día siguiente, capamos a "última hora del día"
-                        // (evita bugs raros al tocar cerca del final del día)
-                        final day0 = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day);
-                        if (dt.isBefore(day0) || !_isSameDay(dt, day0)) {
-                          dt = DateTime(day0.year, day0.month, day0.day, 23, 59);
-                        }
-
-                        final userProv = context.read<UserProvider>();
-                        final workerId = userProv.workerIdForCreate(); // ✅ el worker con el que se crea
-                        final createdByUid = userProv.user?.uid ?? '';
-
-                        final durationMin = _finalMinutesSmart(selectedServiceData, selectedType);
-                        final basePrice = _finalPriceSmart(selectedServiceData, selectedType);
-
-                        final maxOverlap = await widget.conflictService.maxOverlapForCandidate(
-                          day: widget.selectedDay,
-                          candidateStart: dt,
-                          candidateDurationMin: durationMin,
-                          workerId: workerId,
-                          excludeAppointmentId: null,
-                        );
-
-                        final canSave = await widget.conflictService.confirmSaveIfConflict(
-                          context: context,
-                          maxOverlapMin: maxOverlap,
-                          amberThresholdMin: 30,
-                        );
-
-                        if (!canSave) {
-                          if (mounted) setState(() => saving = false);
-                          return;
-                        }
-
-                        // ✅ client resolve
-                        late String clientId;
-                        late String clientName;
-                        late int clientCountry;
-                        late int clientPhone;
-                        late String clientInstagram;
 
                         if (existingClientMode) {
-                          final d = selectedClientData!;
-                          clientId = selectedClientId;
-
-                          final fn = (d['firstName'] ?? '').toString();
-                          final ln = (d['lastName'] ?? '').toString();
-                          clientName = "$fn $ln".trim();
-
-                          clientCountry = (d['country'] is num) ? (d['country'] as num).toInt() : 0;
-                          clientPhone = (d['phone'] is num) ? (d['phone'] as num).toInt() : 0;
-                          clientInstagram = (d['instagram'] ?? '').toString();
+                          if (selectedClientData == null || selectedClientId.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(s.selectExistingClient)),
+                            );
+                            return;
+                          }
                         } else {
-                          final res = await widget.clientService.createOrGetClient(
-                            context: context,
-                            firstName: firstNameCtrl.text.trim(),
-                            lastName: lastNameCtrl.text.trim(),
-                            country: _parseInt(countryCtrl.text),
-                            phone: _parseInt(phoneCtrl.text),
-                            instagramRaw: instagramCtrl.text,
-                          );
+                          final country = _parseInt(countryCtrl.text);
+                          final phone = _parseInt(phoneCtrl.text);
+                          final ig = widget.clientService.normalizeInstagram(instagramCtrl.text);
 
-                          clientId = res.clientId;
-                          clientName = res.fullName;
-                          clientCountry = res.country;
-                          clientPhone = res.phone;
-                          clientInstagram = res.instagram;
+                          final hasPhone = country > 0 && phone > 0;
+                          if (!hasPhone && ig.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(s.phoneOrInstagramRequired)),
+                            );
+                            return;
+                          }
                         }
 
-                        final svcNameKey = (selectedServiceData?['name'] ?? '').toString();
-                        final translatedName =
-                            svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : 'Service';
+                        setState(() => saving = true);
 
-                        final typeLabel = (selectedType?['label'] ?? '').toString();
-                        final typeExtraPrice = (selectedType?['extraPrice'] is num)
-                            ? (selectedType!['extraPrice'] as num).toDouble()
-                            : 0.0;
-
-                        final db = FirebaseFirestore.instance;
-                        final baseId = BookingRequestUtils.appointmentBaseId(
-                          clientName: clientName,
-                          date: dt,
-                          serviceName: translatedName, // o svcNameKey si prefieres
-                        );
-
-                        final apptRef = await BookingRequestUtils.uniqueAppointmentRef(
-                          db: db,
-                          baseId: baseId,
-                        );
-
-                        await apptRef.set({
-                          'clientId': clientId,
-                          'clientName': clientName,
-                          'clientCountry': clientCountry,
-                          'clientPhone': clientPhone,
-                          'clientInstagram': clientInstagram,
-
-                          'serviceId': selectedServiceId,
-                          'serviceNameKey': svcNameKey,
-                          'serviceName': translatedName,
-
-                          'typeId': selectedTypeId,
-                          'typeKey': selectedTypeKey,
-                          'typeLabel': typeLabel,
-                          'typeExtraPrice': typeExtraPrice,
-
-                          'durationMin': durationMin,
-                          'basePrice': basePrice,
-                          'total': basePrice,
-
-                          'status': 'scheduled',
-                          'appointmentDate': Timestamp.fromDate(dt),
-
-                          'workerId': workerId,
-                          'createdByUid': createdByUid,
-
-                          'createdAt': FieldValue.serverTimestamp(),
-                          'updatedAt': FieldValue.serverTimestamp(),
-                        });
-
-                        // ✅ sube stats bien (nested map)
-                        await _apptService.onAppointmentCreated(
-                          appointmentId: apptRef.id,
-                          clientId: clientId,
-                          initialStatus: 'scheduled',
-                          appointmentDate: dt,
-                          lastSummary: translatedName,
-                        );
-
-                        // ✅ NEW: borrar requests SOLO si cumplen TODOS los requisitos.
-                        // Si hay requests (misma category) que NO cumplen, pedimos confirmación.
                         try {
-                          final serviceCategory =
-                              (selectedServiceData?['category'] ?? 'hands').toString();
+                          // ✅ construir dt + snap PRO (:00 / :30) SOLO si viene de Week
+                          final isFromWeek = widget.initialStartTime != null;
 
-                          final plan = await _brRepo.buildDeletePlanForNewAppointment(
-                            clientId: clientId,
-                            appointmentStart: dt,
-                            appointmentDurationMin: durationMin,
-                            workerId: workerId,
-                            serviceCategory: serviceCategory,
-                          );
+                          int h = selectedTime!.hour;
+                          int m = selectedTime!.minute;
 
-                          await _brRepo.deleteRequestsByDocs(
-                            clientId: clientId,
-                            docs: plan.autoDelete,
-                          );
-
-                          if (plan.confirmDelete.isNotEmpty && mounted) {
-                            String rangeLabelFrom(Map<String, dynamic> br) {
-                              final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-                              if (ranges.isEmpty) return 'Any time';
-                              final parts = <String>[];
-                              for (final rr in ranges) {
-                                if (rr is! Map) continue;
-                                final m = Map<String, dynamic>.from(rr);
-                                final s = (m['startMin'] ?? m['start']);
-                                final e = (m['endMin'] ?? m['end']);
-                                final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
-                                final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? 0;
-                                parts.add(
-                                  "${DateTimeUtils.hhmmFromMinutes(sm)}-${DateTimeUtils.hhmmFromMinutes(em)}",
-                                );
-                              }
-                              return parts.join('; ');
-                            }
-
-                            String daysLabelFrom(Map<String, dynamic> br) {
-                              final days = (br['preferredDays'] as List?) ?? const [];
-                              if (days.isEmpty) return '—';
-                              return days
-                                  .map((d) => DateTimeUtils.formatYyyyMmDdToDdMmYyyy(d.toString()))
-                                  .join(', ');
-                            }
-
-                            final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dctx) {
-                                    return AlertDialog(
-                                      title: const Text('Delete booking request(s)?'),
-                                      content: SizedBox(
-                                        width: double.maxFinite,
-                                        child: ListView.separated(
-                                          shrinkWrap: true,
-                                          itemCount: plan.confirmDelete.length,
-                                          separatorBuilder: (_, __) => const Divider(height: 14),
-                                          itemBuilder: (_, i) {
-                                            final doc = plan.confirmDelete[i];
-                                            final br = doc.data();
-                                            final proc = (br['serviceNameLabel'] ??
-                                                    br['serviceNameKey'] ??
-                                                    '')
-                                                .toString();
-                                            final w = (br['workerId'] ?? '').toString();
-                                            final workerLabel =
-                                                w.trim().isEmpty ? 'Any' : w;
-                                            return Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  proc.isEmpty ? 'Request' : proc,
-                                                  style: const TextStyle(fontWeight: FontWeight.w900),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text('Worker: $workerLabel'),
-                                                Text('Day(s): ${daysLabelFrom(br)}'),
-                                                Text('Range(s): ${rangeLabelFrom(br)}'),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(dctx, false),
-                                          child: const Text('Keep'),
-                                        ),
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                          onPressed: () => Navigator.pop(dctx, true),
-                                          child: const Text(
-                                            'Delete',
-                                            style: TextStyle(color: Colors.white),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ) ??
-                                false;
-
-                            if (ok) {
-                              await _brRepo.deleteRequestsByDocs(
-                                clientId: clientId,
-                                docs: plan.confirmDelete,
-                              );
+                          if (isFromWeek) {
+                            if (m < 15) {
+                              m = 0;
+                            } else if (m < 45) {
+                              m = 30;
+                            } else {
+                              m = 0;
+                              h = h + 1;
                             }
                           }
-                        } catch (_) {}
 
-                        if (!mounted) return;
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(s.appointmentCreated)),
-                        );
-                      } catch (e) {
-                        if (_isDuplicateNameCancel(e)) {
-                          if (!mounted) return;
-                          setState(() {
-                            existingClientMode = false;
+                          final durationMinRaw = _finalMinutesSmart(selectedServiceData, selectedType);
+                          final durationMin = durationMinRaw > 0 ? durationMinRaw : 30;
+                          final basePrice = _finalPriceSmart(selectedServiceData, selectedType);
+
+                          // ✅ NEW: clamp business hours 07:00..21:00 (shift start back if needed)
+                          final bounded = _clampStartToBusinessHours(TimeOfDay(hour: h, minute: m), durationMin);
+                          h = bounded.hour;
+                          m = bounded.minute;
+                          selectedTime = bounded; // refleja ajuste en UI
+
+                          DateTime dt = DateTime(
+                            widget.selectedDay.year,
+                            widget.selectedDay.month,
+                            widget.selectedDay.day,
+                            h,
+                            m,
+                          );
+
+                          final day0 = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day);
+                          if (dt.isBefore(day0) || !_isSameDay(dt, day0)) {
+                            // con el clamp debería ser raro, pero por seguridad:
+                            dt = DateTime(day0.year, day0.month, day0.day, 20, 59);
+                          }
+
+                          final userProv = context.read<UserProvider>();
+                          final workerId = userProv.workerIdForCreate();
+                          final createdByUid = userProv.user?.uid ?? '';
+
+                          final maxOverlap = await widget.conflictService.maxOverlapForCandidate(
+                            day: widget.selectedDay,
+                            candidateStart: dt,
+                            candidateDurationMin: durationMin,
+                            workerId: workerId,
+                            excludeAppointmentId: null,
+                          );
+
+                          final canSave = await widget.conflictService.confirmSaveIfConflict(
+                            context: context,
+                            maxOverlapMin: maxOverlap,
+                            amberThresholdMin: 30,
+                          );
+
+                          if (!canSave) {
+                            if (mounted) setState(() => saving = false);
+                            return;
+                          }
+
+                          // ✅ client resolve
+                          late String clientId;
+                          late String clientName;
+                          late int clientCountry;
+                          late int clientPhone;
+                          late String clientInstagram;
+
+                          if (existingClientMode) {
+                            final d = selectedClientData!;
+                            clientId = selectedClientId;
+
+                            final fn = (d['firstName'] ?? '').toString();
+                            final ln = (d['lastName'] ?? '').toString();
+                            clientName = "$fn $ln".trim();
+
+                            clientCountry = (d['country'] is num) ? (d['country'] as num).toInt() : 0;
+                            clientPhone = (d['phone'] is num) ? (d['phone'] as num).toInt() : 0;
+                            clientInstagram = (d['instagram'] ?? '').toString();
+                          } else {
+                            final res = await widget.clientService.createOrGetClient(
+                              context: context,
+                              firstName: firstNameCtrl.text.trim(),
+                              lastName: lastNameCtrl.text.trim(),
+                              country: _parseInt(countryCtrl.text),
+                              phone: _parseInt(phoneCtrl.text),
+                              instagramRaw: instagramCtrl.text,
+                            );
+
+                            clientId = res.clientId;
+                            clientName = res.fullName;
+                            clientCountry = res.country;
+                            clientPhone = res.phone;
+                            clientInstagram = res.instagram;
+                          }
+
+                          final svcNameKey = (selectedServiceData?['name'] ?? '').toString();
+                          final translatedName =
+                              svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : 'Service';
+
+                          final typeLabel = (selectedType?['label'] ?? '').toString();
+                          final typeExtraPrice = (selectedType?['extraPrice'] is num)
+                              ? (selectedType!['extraPrice'] as num).toDouble()
+                              : 0.0;
+
+                          final db = FirebaseFirestore.instance;
+                          final baseId = BookingRequestUtils.appointmentBaseId(
+                            clientName: clientName,
+                            date: dt,
+                            serviceName: translatedName,
+                          );
+
+                          final apptRef = await BookingRequestUtils.uniqueAppointmentRef(
+                            db: db,
+                            baseId: baseId,
+                          );
+
+                          await apptRef.set({
+                            'clientId': clientId,
+                            'clientName': clientName,
+                            'clientCountry': clientCountry,
+                            'clientPhone': clientPhone,
+                            'clientInstagram': clientInstagram,
+
+                            'serviceId': selectedServiceId,
+                            'serviceNameKey': svcNameKey,
+                            'serviceName': translatedName,
+
+                            'typeId': selectedTypeId,
+                            'typeKey': selectedTypeKey,
+                            'typeLabel': typeLabel,
+                            'typeExtraPrice': typeExtraPrice,
+
+                            'durationMin': durationMin,
+                            'basePrice': basePrice,
+                            'total': basePrice,
+
+                            'status': 'scheduled',
+                            'appointmentDate': Timestamp.fromDate(dt),
+
+                            'workerId': workerId,
+                            'createdByUid': createdByUid,
+
+                            'createdAt': FieldValue.serverTimestamp(),
+                            'updatedAt': FieldValue.serverTimestamp(),
                           });
-                          return;
-                        }
 
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(s.errorWithValue(e.toString()))),
-                        );
-                      } finally {
-                        if (mounted) setState(() => saving = false);
-                      }
-                    },
+                          await _apptService.onAppointmentCreated(
+                            appointmentId: apptRef.id,
+                            clientId: clientId,
+                            initialStatus: 'scheduled',
+                            appointmentDate: dt,
+                            lastSummary: translatedName,
+                          );
+
+                          // ✅ NEW: borrar requests SOLO si cumplen TODOS los requisitos.
+                          // Si hay requests (misma category) que NO cumplen, pedimos confirmación.
+                          try {
+                            final serviceCategory = (selectedServiceData?['category'] ?? 'hands').toString();
+
+                            final plan = await _brRepo.buildDeletePlanForNewAppointment(
+                              clientId: clientId,
+                              appointmentStart: dt,
+                              appointmentDurationMin: durationMin,
+                              workerId: workerId,
+                              serviceCategory: serviceCategory,
+                            );
+
+                            await _brRepo.deleteRequestsByDocs(
+                              clientId: clientId,
+                              docs: plan.autoDelete,
+                            );
+
+                            if (plan.confirmDelete.isNotEmpty && mounted) {
+                              String rangeLabelFrom(Map<String, dynamic> br) {
+                                final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
+                                if (ranges.isEmpty) return 'Any time';
+                                final parts = <String>[];
+                                for (final rr in ranges) {
+                                  if (rr is! Map) continue;
+                                  final m = Map<String, dynamic>.from(rr);
+                                  final s = (m['startMin'] ?? m['start']);
+                                  final e = (m['endMin'] ?? m['end']);
+                                  final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? 0;
+                                  final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? 0;
+                                  parts.add(
+                                    "${DateTimeUtils.hhmmFromMinutes(sm)}-${DateTimeUtils.hhmmFromMinutes(em)}",
+                                  );
+                                }
+                                return parts.join('; ');
+                              }
+
+                              String daysLabelFrom(Map<String, dynamic> br) {
+                                final days = (br['preferredDays'] as List?) ?? const [];
+                                if (days.isEmpty) return '—';
+                                return days
+                                    .map((d) => DateTimeUtils.formatYyyyMmDdToDdMmYyyy(d.toString()))
+                                    .join(', ');
+                              }
+
+                              final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (dctx) {
+                                      return AlertDialog(
+                                        title: const Text('Delete booking request(s)?'),
+                                        content: SizedBox(
+                                          width: double.maxFinite,
+                                          child: ListView.separated(
+                                            shrinkWrap: true,
+                                            itemCount: plan.confirmDelete.length,
+                                            separatorBuilder: (_, __) => const Divider(height: 14),
+                                            itemBuilder: (_, i) {
+                                              final doc = plan.confirmDelete[i];
+                                              final br = doc.data();
+                                              final proc = (br['serviceNameLabel'] ??
+                                                      br['serviceNameKey'] ??
+                                                      '')
+                                                  .toString();
+                                              final w = (br['workerId'] ?? '').toString();
+                                              final workerLabel = w.trim().isEmpty ? 'Any' : w;
+                                              return Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    proc.isEmpty ? 'Request' : proc,
+                                                    style: const TextStyle(fontWeight: FontWeight.w900),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text('Worker: $workerLabel'),
+                                                  Text('Day(s): ${daysLabelFrom(br)}'),
+                                                  Text('Range(s): ${rangeLabelFrom(br)}'),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dctx, false),
+                                            child: const Text('Keep'),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                            onPressed: () => Navigator.pop(dctx, true),
+                                            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ) ??
+                                  false;
+
+                              if (ok) {
+                                await _brRepo.deleteRequestsByDocs(
+                                  clientId: clientId,
+                                  docs: plan.confirmDelete,
+                                );
+                              }
+                            }
+                          } catch (_) {}
+
+                          if (!mounted) return;
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(s.appointmentCreated)),
+                          );
+                        } catch (e) {
+                          if (_isDuplicateNameCancel(e)) {
+                            if (!mounted) return;
+                            setState(() {
+                              existingClientMode = false;
+                            });
+                            return;
+                          }
+
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(s.errorWithValue(e.toString()))),
+                          );
+                        } finally {
+                          if (mounted) setState(() => saving = false);
+                        }
+                      },
                 child: saving
                     ? const SizedBox(
                         width: 18,

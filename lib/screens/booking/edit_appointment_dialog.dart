@@ -67,6 +67,35 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   late final AppointmentService _apptService;
   late final BookingRequestRepo _brRepo;
 
+  // =========================
+  // ⏱️ BUSINESS HOURS (NEW)
+  // =========================
+  static const int _kMinStartMin = 7 * 60; // 07:00
+  static const int _kMaxEndMin = 21 * 60; // 21:00
+
+  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  TimeOfDay _fromMin(int m) {
+    final mm = m.clamp(0, 24 * 60 - 1);
+    return TimeOfDay(hour: mm ~/ 60, minute: mm % 60);
+  }
+
+  /// Clamp:
+  /// - start >= 07:00
+  /// - end <= 21:00 (shift start back if needed)
+  TimeOfDay _clampStartToBusinessHours(TimeOfDay picked, int durationMin) {
+    int start = _toMin(picked);
+
+    if (start < _kMinStartMin) start = _kMinStartMin;
+
+    int latestStart = _kMaxEndMin - durationMin;
+    if (latestStart < _kMinStartMin) latestStart = _kMinStartMin;
+
+    if (start > latestStart) start = latestStart;
+
+    return _fromMin(start);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -84,8 +113,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Time init
     final originalTs = widget.data['appointmentDate'];
-    final originalDt =
-        originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
+    final originalDt = originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
     selectedTime = TimeOfDay(hour: originalDt.hour, minute: originalDt.minute);
 
     // Service init
@@ -98,8 +126,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Try load serviceData from cache
     if (selectedServiceId != null) {
-      final cached =
-          widget.services.where((d) => d.id == selectedServiceId).toList();
+      final cached = widget.services.where((d) => d.id == selectedServiceId).toList();
       if (cached.isNotEmpty) {
         selectedServiceData = cached.first.data();
       }
@@ -109,6 +136,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadTypesForSelectedService(autoPickCommon: false);
       _autoPickExistingOrCommonType();
+
+      // ✅ Apply clamp after loading (duration depends on type/service)
+      final dur0 = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+      final durMin = dur0 > 0 ? dur0 : 30;
+      selectedTime = _clampStartToBusinessHours(selectedTime, durMin);
+
       if (mounted) setState(() {});
     });
   }
@@ -171,12 +204,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
         final bc = isCommon(b) ? 0 : 1;
         if (ac != bc) return ac - bc;
 
-        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '')
-            .toString()
-            .toLowerCase();
-        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '')
-            .toString()
-            .toLowerCase();
+        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '').toString().toLowerCase();
+        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '').toString().toLowerCase();
         return al.compareTo(bl);
       });
 
@@ -201,11 +230,9 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
         selectedType = common;
         selectedTypeId = (common['_id'] ?? '').toString();
-        selectedTypeKey =
-            (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '')
-                .toString();
+        selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         serviceTypes = const [];
@@ -222,9 +249,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     if (serviceTypes.isEmpty) return;
 
     if (selectedTypeId.isNotEmpty) {
-      final match = serviceTypes
-          .where((t) => (t['_id'] ?? '').toString() == selectedTypeId)
-          .toList();
+      final match = serviceTypes.where((t) => (t['_id'] ?? '').toString() == selectedTypeId).toList();
       if (match.isNotEmpty) {
         selectedType = match.first;
         return;
@@ -249,8 +274,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     );
     selectedType = common;
     selectedTypeId = (common['_id'] ?? '').toString();
-    selectedTypeKey =
-        (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
+    selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -280,23 +304,17 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
   Future<void> _ensureServiceLoaded() async {
     if (selectedServiceData != null || selectedServiceId == null) return;
-    final doc = await FirebaseFirestore.instance
-        .collection('services')
-        .doc(selectedServiceId!)
-        .get();
+    final doc = await FirebaseFirestore.instance.collection('services').doc(selectedServiceId!).get();
     selectedServiceData = doc.data();
   }
 
-  // ✅ NUEVO dialog bonito: sin "Cancel", con X, y 3 opciones (ambar/rojo/morado)
+  // ✅ NUEVO dialog bonito: sin "Cancel", con X, y 3 opciones
   Future<void> _removeAppointment() async {
     final s = S.of(context);
 
-    // ✅ slot actual (si estaba scheduled, al cancelar/borrar queda libre)
     final oldTs = widget.data['appointmentDate'];
     final oldDt = oldTs is Timestamp ? oldTs.toDate() : DateTime.now();
-    final oldDur = (widget.data['durationMin'] is num)
-        ? (widget.data['durationMin'] as num).toInt()
-        : 0;
+    final oldDur = (widget.data['durationMin'] is num) ? (widget.data['durationMin'] as num).toInt() : 0;
     final oldWorkerId = (widget.data['workerId'] ?? '').toString().trim();
 
     final clientId = (widget.data['clientId'] ?? '').toString();
@@ -316,7 +334,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           titlePadding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
           contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-
           title: Row(
             children: [
               const Expanded(
@@ -334,12 +351,10 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
               ),
             ],
           ),
-
           content: Text(
             "Choose what happened. This updates the appointment status and the client counters.",
             style: TextStyle(color: Colors.grey[700]),
           ),
-
           actions: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -364,7 +379,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                   icon: Icons.auto_fix_high,
                   title: "My error",
                   subtitle: "Remove permanently (wrong booking)",
-                  color: const Color(0xff721c80), // morado app
+                  color: const Color(0xff721c80),
                   onTap: () => Navigator.pop(ctx, 'deletePermanent'),
                 ),
               ],
@@ -393,9 +408,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
               reason: 'cancelled',
               sourceAppointmentId: widget.appointmentId,
             );
-          } catch (_) {
-            // Nunca romper el flujo por notificaciones.
-          }
+          } catch (_) {}
         }
       } else if (choice == 'noShow') {
         await _apptService.noShowAppointment(
@@ -459,12 +472,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // Client preview
     final clientName = (widget.data['clientName'] ?? s.clientFallback).toString();
-    final ctry = (widget.data['clientCountry'] is num)
-        ? (widget.data['clientCountry'] as num).toInt()
-        : 0;
-    final ph = (widget.data['clientPhone'] is num)
-        ? (widget.data['clientPhone'] as num).toInt()
-        : 0;
+    final ctry = (widget.data['clientCountry'] is num) ? (widget.data['clientCountry'] as num).toInt() : 0;
+    final ph = (widget.data['clientPhone'] is num) ? (widget.data['clientPhone'] as num).toInt() : 0;
     final ig = (widget.data['clientInstagram'] ?? '').toString();
 
     final contact = [
@@ -475,9 +484,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     final width = MediaQuery.of(context).size.width;
     final maxDialogWidth = (width * 0.92).clamp(280.0, 440.0);
 
-    final svcNameKey =
-        (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '')
-            .toString();
+    final svcNameKey = (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '').toString();
     final svcLabel = svcNameKey.isNotEmpty
         ? trServiceOrAddon(context, svcNameKey)
         : (widget.data['serviceName'] ?? s.serviceFallback).toString();
@@ -489,7 +496,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-
       title: Row(
         children: [
           Expanded(
@@ -507,7 +513,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           ),
         ],
       ),
-
       content: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxDialogWidth),
         child: SingleChildScrollView(
@@ -533,7 +538,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 12),
 
                 ServiceTypeSelectors(
@@ -553,6 +557,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                     });
 
                     await _loadTypesForSelectedService(autoPickCommon: true);
+                    _autoPickExistingOrCommonType();
+
+                    // ✅ Clamp time after service/type change (duration may change)
+                    final dur0 = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                    final durMin = dur0 > 0 ? dur0 : 30;
+                    setState(() => selectedTime = _clampStartToBusinessHours(selectedTime, durMin));
                   },
                   loadingTypes: loadingTypes,
                   serviceTypes: serviceTypes,
@@ -563,6 +573,11 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                       selectedTypeId = (type?['_id'] ?? '').toString();
                       selectedTypeKey = (type?['nameKey'] ?? type?['_id'] ?? type?['key'] ?? '').toString();
                     });
+
+                    // ✅ Clamp time after type change (duration may change)
+                    final dur0 = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                    final durMin = dur0 > 0 ? dur0 : 30;
+                    setState(() => selectedTime = _clampStartToBusinessHours(selectedTime, durMin));
                   },
                 ),
 
@@ -570,6 +585,10 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
                 InkWell(
                   onTap: () async {
+                    // hide keyboard defensively
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    SystemChannels.textInput.invokeMethod('TextInput.hide');
+
                     final picked = await BoundedTimePicker.show(
                       context: context,
                       initialTime: selectedTime,
@@ -581,7 +600,13 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                       },
                     );
 
-                    if (picked != null && mounted) setState(() => selectedTime = picked);
+                    if (picked != null && mounted) {
+                      await _ensureServiceLoaded();
+                      final dur0 = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                      final durMin = dur0 > 0 ? dur0 : 30;
+                      final adjusted = _clampStartToBusinessHours(picked, durMin);
+                      setState(() => selectedTime = adjusted);
+                    }
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
@@ -637,7 +662,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           ),
         ),
       ),
-
       actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       actions: [
         SizedBox(
@@ -649,9 +673,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                 onPressed: saving ? null : _removeAppointment,
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               ),
-
               const Spacer(),
-
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xff721c80),
@@ -674,16 +696,21 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
                         setState(() => saving = true);
                         try {
+                          final durationMinRaw = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
+                          final durationMin = durationMinRaw > 0 ? durationMinRaw : 30;
+                          final basePrice = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
+
+                          // ✅ clamp final before building dt
+                          final bounded = _clampStartToBusinessHours(selectedTime, durationMin);
+                          selectedTime = bounded;
+
                           final dt = DateTime(
                             widget.selectedDay.year,
                             widget.selectedDay.month,
                             widget.selectedDay.day,
-                            selectedTime.hour,
-                            selectedTime.minute,
+                            bounded.hour,
+                            bounded.minute,
                           );
-
-                          final durationMin = _finalMinutesSmart(selectedServiceData ?? widget.data, selectedType);
-                          final basePrice = _finalPriceSmart(selectedServiceData ?? widget.data, selectedType);
 
                           // ✅ OLD slot (antes del edit) para detectar hueco liberado
                           final oldTs = widget.data['appointmentDate'];
@@ -693,27 +720,19 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                               : 0;
 
                           final userProv = context.read<UserProvider>();
-
                           final existingWorkerId = (widget.data['workerId'] ?? '').toString().trim();
 
-                          // ✅ workerId efectivo:
-                          // - si el appointment ya tiene workerId -> ese
-                          // - si NO tiene (appointment viejo) -> intentamos asignarlo según el usuario actual
                           String? effectiveWorkerId = existingWorkerId.isNotEmpty ? existingWorkerId : null;
 
                           if (effectiveWorkerId == null || effectiveWorkerId.isEmpty) {
-                            // si es worker: su workerId
                             if (userProv.isWorker && (userProv.workerId ?? '').isNotEmpty) {
                               effectiveWorkerId = userProv.workerId!;
                             }
-                            // si es admin: el seleccionado (no debería ser null si va a crear/editar en un worker concreto)
                             if (userProv.isAdmin && (userProv.selectedWorkerId ?? '').isNotEmpty) {
                               effectiveWorkerId = userProv.selectedWorkerId!;
                             }
                           }
 
-                          // Si sigue null, no bloqueamos el edit (por compat),
-                          // pero NO podremos calcular conflictos por worker correctamente.
                           final bool canCheckConflicts = effectiveWorkerId != null && effectiveWorkerId.isNotEmpty;
 
                           int maxOverlap = 0;
@@ -738,10 +757,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             return;
                           }
 
-                          final svcKey = (selectedServiceData?['name'] ??
-                                  widget.data['serviceNameKey'] ??
-                                  '')
-                              .toString();
+                          final svcKey = (selectedServiceData?['name'] ?? widget.data['serviceNameKey'] ?? '').toString();
                           final translatedName = svcKey.isNotEmpty
                               ? trServiceOrAddon(context, svcKey)
                               : (widget.data['serviceName'] ?? s.serviceFallback).toString();
@@ -770,12 +786,11 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             'appointmentDate': Timestamp.fromDate(dt),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
-                          
+
                           final clientId = (widget.data['clientId'] ?? '').toString().trim();
                           if (clientId.isNotEmpty) {
                             try {
-                              final serviceCategory =
-                                  (selectedServiceData?['category'] ?? 'hands').toString();
+                              final serviceCategory = (selectedServiceData?['category'] ?? 'hands').toString();
 
                               final plan = await _brRepo.buildDeletePlanForNewAppointment(
                                 clientId: clientId,
@@ -831,13 +846,9 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                                               itemBuilder: (_, i) {
                                                 final doc = plan.confirmDelete[i];
                                                 final br = doc.data();
-                                                final proc = (br['serviceNameLabel'] ??
-                                                        br['serviceNameKey'] ??
-                                                        '')
-                                                    .toString();
+                                                final proc = (br['serviceNameLabel'] ?? br['serviceNameKey'] ?? '').toString();
                                                 final w = (br['workerId'] ?? '').toString();
-                                                final workerLabel =
-                                                    w.trim().isEmpty ? 'Any' : w;
+                                                final workerLabel = w.trim().isEmpty ? 'Any' : w;
                                                 return Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
@@ -862,10 +873,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                                             ElevatedButton(
                                               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                               onPressed: () => Navigator.pop(dctx, true),
-                                              child: const Text(
-                                                'Delete',
-                                                style: TextStyle(color: Colors.white),
-                                              ),
+                                              child: const Text('Delete', style: TextStyle(color: Colors.white)),
                                             ),
                                           ],
                                         );
@@ -884,10 +892,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                           }
 
                           // ✅ Si el edit movió la cita (o cambió duración), ese hueco viejo quedó libre.
-                          if (canCheckConflicts &&
-                              effectiveWorkerId != null &&
-                              effectiveWorkerId.isNotEmpty &&
-                              oldDur > 0) {
+                          if (canCheckConflicts && effectiveWorkerId != null && effectiveWorkerId.isNotEmpty && oldDur > 0) {
                             final moved = oldDt.year != dt.year ||
                                 oldDt.month != dt.month ||
                                 oldDt.day != dt.day ||
@@ -942,7 +947,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 }
 
 // ─────────────────────────────────────────────────────────────
-// UI: botón bonito para elegir motivo (ambar / rojo / morado)
+// UI: botón bonito para elegir motivo
 // ─────────────────────────────────────────────────────────────
 class _ReasonButton extends StatelessWidget {
   const _ReasonButton({

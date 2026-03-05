@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import 'package:salon_app/provider/admin_nav_provider.dart';
 
@@ -37,7 +38,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   bool _creatingRequest = false;
 
-  // NEW: multi-day + multi-range
+  // multi-day + multi-range
   final List<String> _selectedDayKeys = <String>[]; // yyyymmdd
   final List<Map<String, int>> _selectedRanges = <Map<String, int>>[]; // {startMin,endMin}
 
@@ -48,12 +49,20 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   static const Color kPurple = Color(0xff721c80);
 
-  // límites
-  static const int _startMinClamp = 7 * 60 + 30;
-  static const int _startMaxClamp = 19 * 60;
-  static const int _endMinClamp = 9 * 60;
-  static const int _endMaxClamp = 21 * 60;
+  // Business hours (requested): 07:00 - 21:00
+  static const int _bizStartMin = 7 * 60;
+  static const int _bizEndMax = 21 * 60;
+  static const int _minRangeLen = 15;      // mínimo 15 min
 
+  // Pickers clamp (keep sane values)
+  static const int _startMinClamp = _bizStartMin; // 07:00
+  static const int _startMaxClamp = 20 * 60; // latest "start" pick; real latest depends on duration
+  static const int _endMinClamp = 7 * 60 + 30; // 07:30 (UI convenience)
+  static const int _endMaxClamp = _bizEndMax; // 21:00
+
+  Future<List<String>>? _workersFuture;
+  List<String> _workerIdsCache = const [];
+  
   int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
 
   TimeOfDay _fromMin(int minutes) {
@@ -66,6 +75,214 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final v = _toMin(t);
     final clamped = v.clamp(min, max);
     return _fromMin(clamped);
+  }
+
+  // ===================== Range rules (Booking Requests) =====================
+
+  int _roundUpToStep(int minutes, int step) {
+    if (step <= 1) return minutes;
+    final r = minutes % step;
+    return r == 0 ? minutes : minutes + (step - r);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  int _nowMinRounded({required int step}) {
+    final now = DateTime.now();
+    final m = now.hour * 60 + now.minute;
+    return _roundUpToStep(m, step);
+  }
+
+  /// Start initial:
+  /// - por defecto 07:00
+  /// - si hoy, entonces max(07:00, ahora redondeado)
+  TimeOfDay _initialStartTimeForRange() {
+    int startMin = _bizStartMin;
+
+    // si hoy: no permitir empezar antes de ahora
+    final today = DateTime.now();
+    // OJO: si tu booking request NO tiene días seleccionados aún, lo tratamos como "hoy" para UX.
+    // Si YA hay días seleccionados y NO incluye hoy, entonces usamos 07:00.
+    final hasTodaySelected = _selectedDayKeys.any((k) {
+      final dt = BookingRequestUtils.parseYyyymmdd(k);
+      return dt != null && _isSameDay(dt, today);
+    });
+
+    if (hasTodaySelected) {
+      final nowMin = _nowMinRounded(step: 5);
+      startMin = startMin < nowMin ? nowMin : startMin;
+    }
+
+    // si ya son más de 21:00, igual dejaremos 21:00 (pero luego no podrás crear rango)
+    if (startMin > _bizEndMax - _minRangeLen) {
+      startMin = _bizEndMax - _minRangeLen;
+    }
+
+    return _fromMin(startMin);
+  }
+
+  /// End initial siempre = start + 15
+  TimeOfDay _initialEndFromStart(TimeOfDay start) {
+    final s = _toMin(start);
+    final e = (s + _minRangeLen).clamp(_bizStartMin + _minRangeLen, _bizEndMax);
+    return _fromMin(e);
+  }
+
+  /// Ajusta start/end a reglas:
+  /// - start >= 07:00
+  /// - end <= 21:00
+  /// - end >= start + 15
+  ({TimeOfDay start, TimeOfDay end}) _sanitizeRange(TimeOfDay start, TimeOfDay end) {
+    int s = _toMin(start);
+    int e = _toMin(end);
+
+    if (s < _bizStartMin) s = _bizStartMin;
+    if (e > _bizEndMax) e = _bizEndMax;
+
+    // end mínimo 15 min después
+    final minEnd = s + _minRangeLen;
+    if (e < minEnd) e = minEnd;
+
+    // si por límite 21:00 se rompe, empuja start hacia atrás
+    if (e > _bizEndMax) e = _bizEndMax;
+    if (s > _bizEndMax - _minRangeLen) s = _bizEndMax - _minRangeLen;
+
+    // vuelve a asegurar minEnd tras mover start
+    final minEnd2 = s + _minRangeLen;
+    if (e < minEnd2) e = minEnd2;
+    if (e > _bizEndMax) e = _bizEndMax;
+
+    return (start: _fromMin(s), end: _fromMin(e));
+  }
+
+  /// Comprueba si un rango (en minutos) puede contener un procedimiento de durationMin
+  bool _rangeFitsDuration(Map<String, int> r, int durationMin) {
+    final s = r['startMin'] ?? 0;
+    final e = r['endMin'] ?? 0;
+    return (e - s) >= durationMin;
+  }
+
+  Future<void> _showRangeStepOverlay({
+    required String title,
+    required String subtitle,
+  }) async {
+    if (!mounted) return;
+
+    await showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: "range_step",
+      barrierColor: Colors.black.withOpacity(0.15),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (ctx, a1, a2) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 18,
+                    spreadRadius: 1,
+                    color: Colors.black.withOpacity(0.18),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: kPurple.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: kPurple.withOpacity(0.25)),
+                        ),
+                        child: Icon(Icons.check, color: kPurple),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      subtitle,
+                      style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 6,
+                      valueColor: AlwaysStoppedAnimation<Color>(kPurple.withOpacity(0.85)),
+                      backgroundColor: Colors.black.withOpacity(0.06),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, a2, child) {
+        final curve = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        return FadeTransition(
+          opacity: curve,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.98, end: 1.0).animate(curve),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  void _showStepHint(String text) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(text),
+        duration: const Duration(milliseconds: 900),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      ),
+    );
+  }
+
+  String _fmtDdMm(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    return '$dd/$mm';
+  }
+
+  String _fmtDdMmYyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yy = d.year.toString();
+    return '$dd/$mm/$yy';
+  }
+
+  String _fmtHm(DateTime d) {
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mi = d.minute.toString().padLeft(2, '0');
+    return '$hh:$mi';
   }
 
   Future<void> _addDay() async {
@@ -90,29 +307,86 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   }
 
   Future<void> _addRange() async {
-    final start = await showTimePicker(
+    // 1) START picker: por defecto 07:00 (o ahora si HOY está seleccionado)
+    final startPicked = await showTimePicker(
       context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      initialTime: _initialStartTimeForRange(),
     );
-    if (start == null) return;
-    final fixedStart = _clampTime(start, _startMinClamp, _startMaxClamp);
+    if (startPicked == null) return;
 
-    final minAllowed = (_toMin(fixedStart) < _endMinClamp) ? _endMinClamp : _toMin(fixedStart);
-    final end = await showTimePicker(
-      context: context,
-      initialTime: _fromMin(minAllowed),
+    // Clamp start a 07:00..(21:00-15)
+    TimeOfDay start = startPicked;
+    final sMin = _toMin(start);
+    final clampedSMin = sMin.clamp(_bizStartMin, _bizEndMax - _minRangeLen);
+    start = _fromMin(clampedSMin);
+
+    // ✅ Overlay bonito entre pasos (se cierra solo)
+    await Future.delayed(const Duration(milliseconds: 80));
+    HapticFeedback.selectionClick();
+
+    final startLabel = BookingRequestUtils.hhmm(start);
+
+    // auto-close overlay
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    });
+
+    await _showRangeStepOverlay(
+      title: "Inicio guardado: $startLabel",
+      subtitle: "Ahora selecciona el fin",
     );
-    if (end == null) return;
-    var fixedEnd = _clampTime(end, _endMinClamp, _endMaxClamp);
-    if (_toMin(fixedEnd) < _toMin(fixedStart)) {
-      fixedEnd = _clampTime(fixedStart, _endMinClamp, _endMaxClamp);
+
+    await Future.delayed(const Duration(milliseconds: 120));
+
+    // 2) END picker: preseleccionado start + 15
+    final endPicked = await showTimePicker(
+      context: context,
+      initialTime: _initialEndFromStart(start),
+    );
+    if (endPicked == null) return;
+
+    // Sanitizar rango a reglas
+    final fixed = _sanitizeRange(start, endPicked);
+    final startFixed = fixed.start;
+    final endFixed = fixed.end;
+
+    final range = BookingRequestUtils.range(startFixed, endFixed);
+
+    // ✅ Si hay procedimiento seleccionado, verificar que cabe
+    final durationMin = _selectedDurationMin > 0 ? _selectedDurationMin : 30;
+
+    if (!_rangeFitsDuration(range, durationMin)) {
+      await showDialog<void>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          title: const Text("Rango demasiado pequeño"),
+          content: Text("Este procedimiento necesita ${durationMin} min. Ajusta el fin del rango."),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dctx),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+      return;
     }
 
     setState(() {
-      _selectedRanges.add(BookingRequestUtils.range(fixedStart, fixedEnd));
+      _selectedRanges.add(range);
     });
-  }
 
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "✅ Rango añadido: ${BookingRequestUtils.hhmm(startFixed)}–${BookingRequestUtils.hhmm(endFixed)}",
+        ),
+        duration: const Duration(milliseconds: 900),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      ),
+    );
+  }
   void _removeRangeAt(int i) {
     if (i < 0 || i >= _selectedRanges.length) return;
     setState(() => _selectedRanges.removeAt(i));
@@ -123,8 +397,14 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     super.initState();
     brRepo = BookingRequestRepo(FirebaseFirestore.instance);
 
+    _workersFuture = _getAllWorkerIds().then((ids) {
+      _workerIdsCache = ids;
+      return ids;
+    });
+
     // limpieza automática al abrir (expiradas)
     brRepo.pruneExpiredActiveRequests(clientId: widget.clientId);
+    
   }
 
   String _fullName(Map<String, dynamic> c, String fallback) {
@@ -180,12 +460,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   static const int kStepMin = 5;
 
-  String _fmtDdMm(DateTime d) {
-    final dd = d.day.toString().padLeft(2, '0');
-    final mm = d.month.toString().padLeft(2, '0');
-    return '$dd/$mm';
-  }
-
   int _requestedDurationMin(Map<String, dynamic> br) {
     final v = br['durationMin'];
     if (v is num) return v.toInt();
@@ -234,6 +508,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     return true;
   }
 
+  /// ✅ Important: returns first start that fits COMPLETELY inside each range
+  /// AND fits inside business hours 07:00-21:00
   DateTime? _firstSlotOnDayForWorker({
     required DateTime day,
     required List<Map<String, int>> ranges,
@@ -243,8 +519,15 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
   }) {
     for (final r in ranges) {
-      final rs = r['startMin'] ?? 0;
-      final re = r['endMin'] ?? (24 * 60);
+      final rawStart = r['startMin'] ?? 0;
+      final rawEnd = r['endMin'] ?? (24 * 60);
+
+      // clamp to business hours
+      final rs = rawStart < _bizStartMin ? _bizStartMin : rawStart;
+      final re = rawEnd > _bizEndMax ? _bizEndMax : rawEnd;
+
+      // if range can't fit the full procedure, skip
+      if (re - rs < durMin) continue;
 
       for (int s = rs; s + durMin <= re; s += kStepMin) {
         final ok = _slotOkForWorkerWithTolerance(
@@ -284,12 +567,21 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     return out;
   }
 
+  Future<List<String>> _getAllWorkerIds() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('workers').get();
+      return snap.docs.map((d) => d.id).where((id) => id.trim().isNotEmpty).toList();
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
   ({BookingRequestAvailability status, DateTime? nextStart}) _availabilityInfoForRequest({
     required Map<String, dynamic> br,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
   }) {
-    final workerId = (br['workerId'] ?? '').toString().trim();
-    final isAnyWorker = workerId.isEmpty;
+    final workerIdRaw = (br['workerId'] ?? '').toString().trim();
+    final isAnyWorker = workerIdRaw.isEmpty;
 
     final preferredDays = (br['preferredDays'] as List?)
             ?.map((e) => e.toString())
@@ -307,51 +599,63 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       return (status: BookingRequestAvailability.unknown, nextStart: null);
     }
 
-    // worker Any: por ahora checking (lo hacemos exacto cuando metas workers list)
-    if (isAnyWorker) {
-      return (status: BookingRequestAvailability.unknown, nextStart: null);
-    }
-
-    // exact slots
-    for (final x in exactSlots) {
-      if (x is! Timestamp) continue;
-      final dt = x.toDate();
-      final day = DateTime(dt.year, dt.month, dt.day);
-      final sMin = dt.hour * 60 + dt.minute;
-
-      final ok = _slotOkForWorkerWithTolerance(
-        day: day,
-        startMin: sMin,
-        durMin: durMin,
-        workerId: workerId,
-        allowedOverlap: allowedOverlap,
-        appts: appts,
-      );
-      if (ok) return (status: BookingRequestAvailability.available, nextStart: dt);
-    }
-
-    // preferred days
+    // Parse preferred days sorted
     final parsedDays = preferredDays
         .map((k) => BookingRequestUtils.parseYyyymmdd(k))
         .whereType<DateTime>()
         .toList()
       ..sort((a, b) => a.compareTo(b));
 
-    for (final day in parsedDays) {
-      final first = _firstSlotOnDayForWorker(
-        day: day,
-        ranges: ranges,
-        durMin: durMin,
-        workerId: workerId,
-        allowedOverlap: allowedOverlap,
-        appts: appts,
-      );
-      if (first != null) {
-        return (status: BookingRequestAvailability.available, nextStart: first);
+    // ─────────────────────────────────────────────────────────────
+    // EXACT SLOTS
+    // ─────────────────────────────────────────────────────────────
+    if (!isAnyWorker) {
+      // Exact slots for a fixed worker
+      for (final x in exactSlots) {
+        if (x is! Timestamp) continue;
+        final dt = x.toDate();
+        final day = DateTime(dt.year, dt.month, dt.day);
+        final sMin = dt.hour * 60 + dt.minute;
+
+        final ok = _slotOkForWorkerWithTolerance(
+          day: day,
+          startMin: sMin,
+          durMin: durMin,
+          workerId: workerIdRaw,
+          allowedOverlap: allowedOverlap,
+          appts: appts,
+        );
+        if (ok) return (status: BookingRequestAvailability.available, nextStart: dt);
       }
+    } else {
+      // Any worker: we can’t decide sync without workers list -> return checking here,
+      // but we'll compute async via FutureBuilder in the UI (next section).
+      return (status: BookingRequestAvailability.unknown, nextStart: null);
     }
 
-    return (status: BookingRequestAvailability.unavailable, nextStart: null);
+    // ─────────────────────────────────────────────────────────────
+    // PREFERRED DAYS
+    // ─────────────────────────────────────────────────────────────
+    if (!isAnyWorker) {
+      for (final day in parsedDays) {
+        final first = _firstSlotOnDayForWorker(
+          day: day,
+          ranges: ranges,
+          durMin: durMin,
+          workerId: workerIdRaw,
+          allowedOverlap: allowedOverlap,
+          appts: appts,
+        );
+        if (first != null) {
+          return (status: BookingRequestAvailability.available, nextStart: first);
+        }
+      }
+
+      return (status: BookingRequestAvailability.unavailable, nextStart: null);
+    }
+
+    // Any worker already returned unknown above
+    return (status: BookingRequestAvailability.unknown, nextStart: null);
   }
 
   String _pillLabelForRequest(BookingRequestAvailability status, DateTime? nextStart) {
@@ -359,10 +663,21 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (status == BookingRequestAvailability.unavailable) return "No availability";
     if (nextStart == null) return " ";
 
-    final hm =
-        "${nextStart.hour.toString().padLeft(2, '0')}:${nextStart.minute.toString().padLeft(2, '0')}";
+    final hm = _fmtHm(nextStart);
     final ddmm = _fmtDdMm(nextStart);
     return "$hm - $ddmm";
+  }
+
+  // ===================== Validations =====================
+
+  bool _rangesFitDuration(List<Map<String, int>> ranges, int durMin) {
+    if (ranges.isEmpty) return true; // allow empty => "any time"
+    for (final r in ranges) {
+      final s = r['startMin'] ?? 0;
+      final e = r['endMin'] ?? 0;
+      if (e - s < durMin) return false;
+    }
+    return true;
   }
 
   // ===================== Create request =====================
@@ -388,7 +703,15 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final label = nameKey.isNotEmpty ? nameKey : _selectedServiceId!;
     final dur = (svc['durationMin'] is num) ? (svc['durationMin'] as num).toInt() : _selectedDurationMin;
 
-    // ✅ NEW: si ya existe un appointment FUTURO de la misma category, pedir confirmación
+    // ✅ NEW: validate ranges >= duration
+    if (!_rangesFitDuration(ranges, dur)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Selected time range must be at least $dur min")),
+      );
+      return;
+    }
+
+    // ✅ NEW: if future appointment exists with same category, show first date/time and confirm
     final selectedCategory = (svc['category'] ?? 'hands').toString();
     try {
       final now = Timestamp.now();
@@ -397,32 +720,42 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
           .where('clientId', isEqualTo: widget.clientId)
           .where('status', isEqualTo: 'scheduled')
           .where('appointmentDate', isGreaterThanOrEqualTo: now)
-          .limit(20)
+          .orderBy('appointmentDate')
+          .limit(25)
           .get();
 
-      bool hasSameCategory = false;
+      DateTime? firstSameCat;
       final cache = <String, String>{};
+
       for (final a in apptsSnap.docs) {
-        final sid = (a.data()['serviceId'] ?? '').toString();
+        final data = a.data();
+        final sid = (data['serviceId'] ?? '').toString();
         if (sid.isEmpty) continue;
+
         final cat = cache[sid] ??
             ((await FirebaseFirestore.instance.collection('services').doc(sid).get()).data()?['category'] ?? 'hands')
                 .toString();
         cache[sid] = cat;
+
         if (cat == selectedCategory) {
-          hasSameCategory = true;
+          final ts = data['appointmentDate'];
+          if (ts is Timestamp) {
+            firstSameCat = ts.toDate();
+          }
           break;
         }
       }
 
-      if (hasSameCategory) {
+      if (firstSameCat != null) {
         final ok = await showDialog<bool>(
               context: context,
               builder: (ctx) {
                 return AlertDialog(
                   title: const Text('Appointment already exists'),
                   content: Text(
-                    "This client already has a scheduled appointment for category '$selectedCategory'. Create a booking request anyway?",
+                    "This client already has a scheduled appointment for '$selectedCategory': "
+                    "${_fmtHm(firstSameCat!)} • ${_fmtDdMmYyyy(firstSameCat)}\n\n"
+                    "Create a booking request anyway?",
                   ),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -432,9 +765,19 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
               },
             ) ??
             false;
+
         if (!ok) return;
       }
     } catch (_) {}
+
+    final durationMin = _selectedDurationMin > 0 ? _selectedDurationMin : 30;
+    final badRanges = _selectedRanges.where((r) => !_rangeFitsDuration(r, durationMin)).toList();
+    if (badRanges.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("⛔ Ajusta los rangos: necesitan ≥ ${durationMin} min para este procedimiento")),
+      );
+      return;
+    }
 
     await brRepo.upsertRequest(
       clientId: widget.clientId,
@@ -585,8 +928,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
               setLocal(() => saving = true);
               try {
-                final svcDoc =
-                    await FirebaseFirestore.instance.collection('services').doc(serviceId!).get();
+                final svcDoc = await FirebaseFirestore.instance.collection('services').doc(serviceId!).get();
                 final svc = svcDoc.data() ?? const <String, dynamic>{};
 
                 final nameKey = (svc['name'] ?? '').toString();
@@ -595,6 +937,14 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
                 final preferredDays = List<String>.from(dayKeys);
                 final preferredRanges = List<Map<String, int>>.from(rangeList);
+
+                // ✅ NEW: validate ranges >= duration
+                if (!_rangesFitDuration(preferredRanges, dur)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Selected time range must be at least $dur min")),
+                  );
+                  return;
+                }
 
                 await brRepo.updateRequest(
                   requestId: requestId,
@@ -637,16 +987,75 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     ],
                   ),
                   const SizedBox(height: 10),
-
                   BookingRequestCreateForm(
                     selectedWorkerId: workerId,
                     onWorkerChanged: (v) => setLocal(() => workerId = v),
 
                     selectedServiceId: serviceId,
-                    onServiceChanged: (v) => setLocal(() => serviceId = v),
+                    onServiceChanged: (newServiceId) async {
+                      if (newServiceId == null || newServiceId.isEmpty) {
+                        setLocal(() {
+                          serviceId = null;
+                        });
+                        return;
+                      }
+
+                      // ✅ NUNCA desmarcar procedimiento: siempre se aplica
+                      setLocal(() => serviceId = newServiceId);
+
+                      // Cargar duración del procedimiento para validar rangos
+                      int dur = 30;
+                      try {
+                        final doc = await FirebaseFirestore.instance
+                            .collection('services')
+                            .doc(newServiceId)
+                            .get();
+                        final data = doc.data() ?? const <String, dynamic>{};
+                        dur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 30;
+                      } catch (_) {}
+
+                      // 🔎 detectar rangos que no caben
+                      final badIdx = <int>[];
+                      for (int i = 0; i < rangeList.length; i++) {
+                        final r = rangeList[i];
+                        final s = r['startMin'] ?? 0;
+                        final e = r['endMin'] ?? 0;
+                        if ((e - s) < dur) badIdx.add(i);
+                      }
+
+                      if (badIdx.isEmpty || !ctx.mounted) return;
+
+                      await showDialog<void>(
+                        context: ctx,
+                        builder: (dctx) => AlertDialog(
+                          title: const Text("Rangos demasiado pequeños"),
+                          content: Text(
+                            "Este procedimiento necesita ${dur} min.\n\n"
+                            "Se eliminarán ${badIdx.length} rango(s) que no tienen suficiente tiempo.",
+                          ),
+                          actions: [
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(dctx),
+                              child: const Text("OK"),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      setLocal(() {
+                        for (final i in badIdx.reversed) {
+                          rangeList.removeAt(i);
+                        }
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Se eliminaron rangos incompatibles (mínimo ${dur} min).")),
+                      );
+                    },
 
                     selectedDays: dayKeys,
                     selectedRanges: rangeList,
+
                     onAddDay: () async {
                       final now = DateTime.now();
                       final today = DateTime(now.year, now.month, now.day);
@@ -663,23 +1072,121 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                         dayKeys.sort();
                       });
                     },
+
                     onRemoveDayKey: (k) => setLocal(() => dayKeys.remove(k)),
+
                     onAddRange: () async {
-                      final start = await showTimePicker(
+                      // 1) START: 07:00 (o ahora si HOY está entre dayKeys)
+                      TimeOfDay initialStart() {
+                        int startMin = _bizStartMin; // 07:00
+
+                        final today = DateTime.now();
+                        final hasTodaySelected = dayKeys.any((k) {
+                          final dt = BookingRequestUtils.parseYyyymmdd(k);
+                          return dt != null && _isSameDay(dt, today);
+                        });
+
+                        if (hasTodaySelected) {
+                          final nowMin = _nowMinRounded(step: 5);
+                          if (startMin < nowMin) startMin = nowMin;
+                        }
+
+                        if (startMin > _bizEndMax - _minRangeLen) {
+                          startMin = _bizEndMax - _minRangeLen;
+                        }
+
+                        return _fromMin(startMin);
+                      }
+
+                      final startPicked = await showTimePicker(
                         context: ctx,
-                        initialTime: const TimeOfDay(hour: 9, minute: 0),
+                        initialTime: initialStart(),
                       );
-                      if (start == null) return;
-                      final sMin = start.hour * 60 + start.minute;
-                      final end = await showTimePicker(
+                      if (startPicked == null) return;
+
+                      // clamp start a 07:00..(21:00-15)
+                      TimeOfDay start = startPicked;
+                      final sMin = _toMin(start);
+                      final clampedSMin = sMin.clamp(_bizStartMin, _bizEndMax - _minRangeLen);
+                      start = _fromMin(clampedSMin);
+
+                      // overlay bonito entre pasos
+                      await Future.delayed(const Duration(milliseconds: 80));
+                      HapticFeedback.selectionClick();
+
+                      final startLabel = BookingRequestUtils.hhmm(start);
+
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        if (ctx.mounted) Navigator.of(ctx, rootNavigator: true).pop();
+                      });
+
+                      await _showRangeStepOverlay(
+                        title: "Inicio guardado: $startLabel",
+                        subtitle: "Ahora selecciona el fin",
+                      );
+
+                      await Future.delayed(const Duration(milliseconds: 120));
+
+                      // 2) END: start + 15
+                      final endPicked = await showTimePicker(
                         context: ctx,
-                        initialTime: TimeOfDay(hour: (sMin ~/ 60).clamp(0, 23), minute: (sMin % 60).clamp(0, 59)),
+                        initialTime: _initialEndFromStart(start),
                       );
-                      if (end == null) return;
-                      final eMin = end.hour * 60 + end.minute;
-                      if (eMin <= sMin) return;
-                      setLocal(() => rangeList.add({'startMin': sMin, 'endMin': eMin}));
+                      if (endPicked == null) return;
+
+                      final fixed = _sanitizeRange(start, endPicked);
+                      final startFixed = fixed.start;
+                      final endFixed = fixed.end;
+
+                      final range = BookingRequestUtils.range(startFixed, endFixed);
+
+                      // ✅ Validar duración del procedimiento si hay serviceId seleccionado
+                      int dur = 30;
+                      if (serviceId != null && serviceId!.isNotEmpty) {
+                        try {
+                          final doc = await FirebaseFirestore.instance
+                              .collection('services')
+                              .doc(serviceId!)
+                              .get();
+                          final data = doc.data() ?? const <String, dynamic>{};
+                          dur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 30;
+                        } catch (_) {}
+                      }
+
+                      final rs = range['startMin'] ?? 0;
+                      final re = range['endMin'] ?? 0;
+
+                      if ((re - rs) < dur) {
+                        await showDialog<void>(
+                          context: ctx,
+                          builder: (dctx) => AlertDialog(
+                            title: const Text("Rango demasiado pequeño"),
+                            content: Text("Este procedimiento necesita ${dur} min. Ajusta el fin del rango."),
+                            actions: [
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(dctx),
+                                child: const Text("OK"),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+
+                      setLocal(() => rangeList.add(range));
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "✅ Rango añadido: ${BookingRequestUtils.hhmm(startFixed)}–${BookingRequestUtils.hhmm(endFixed)}",
+                          ),
+                          duration: const Duration(milliseconds: 900),
+                          behavior: SnackBarBehavior.floating,
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                      );
                     },
+
                     onRemoveRangeAt: (i) {
                       if (i < 0 || i >= rangeList.length) return;
                       setLocal(() => rangeList.removeAt(i));
@@ -688,7 +1195,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     onCreate: save,
                     purple: kPurple,
                   ),
-
                   const SizedBox(height: 10),
                   if (saving) const CircularProgressIndicator(),
                 ],
@@ -707,35 +1213,179 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     required Map<String, dynamic> br,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appointmentsDocs,
   }) {
-    final info = _availabilityInfoForRequest(br: br, appts: appointmentsDocs);
-    final label = _pillLabelForRequest(info.status, info.nextStart);
+    final workerIdRaw = (br['workerId'] ?? '').toString().trim();
+    final isAnyWorker = workerIdRaw.isEmpty;
 
-    return BookingRequestCard(
-      requestId: requestId,
-      br: br,
-      purple: kPurple,
-      availability: info.status,
-      availabilityLabel: label,
-      onDelete: () async {
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (dctx) => AlertDialog(
-            title: const Text("Delete request?"),
-            content: const Text("This will delete this booking request."),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(dctx, true),
-                child: const Text("Delete", style: TextStyle(color: Colors.white)),
+    if (!isAnyWorker) {
+      final info = _availabilityInfoForRequest(br: br, appts: appointmentsDocs);
+      final label = _pillLabelForRequest(info.status, info.nextStart);
+
+      return BookingRequestCard(
+        requestId: requestId,
+        br: br,
+        purple: kPurple,
+        availability: info.status,
+        availabilityLabel: label,
+        onDelete: () async {
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (dctx) => AlertDialog(
+              title: const Text("Delete request?"),
+              content: const Text("This will delete this booking request."),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  onPressed: () => Navigator.pop(dctx, true),
+                  child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          if (ok != true) return;
+          await brRepo.deleteRequest(requestId);
+        },
+        onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
+      );
+    }
+
+    // ✅ Any worker: compute earliest slot across all workers (async)
+    return FutureBuilder<List<String>>(
+      future: _workersFuture,
+      builder: (context, wsnap) {
+        final workerIds = _workerIdsCache.isNotEmpty ? _workerIdsCache : (wsnap.data ?? const <String>[]);
+
+        // still loading workers
+        if (workerIds.isEmpty && wsnap.connectionState != ConnectionState.done) {
+          return BookingRequestCard(
+            requestId: requestId,
+            br: br,
+            purple: kPurple,
+            availability: BookingRequestAvailability.unknown,
+            availabilityLabel: "Checking…",
+            onDelete: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (dctx) => AlertDialog(
+                  title: const Text("Delete request?"),
+                  content: const Text("This will delete this booking request."),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => Navigator.pop(dctx, true),
+                      child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              await brRepo.deleteRequest(requestId);
+            },
+            onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
+          );
+        }
+
+        if (workerIds.isEmpty) {
+          // no workers found -> can't compute
+          return BookingRequestCard(
+            requestId: requestId,
+            br: br,
+            purple: kPurple,
+            availability: BookingRequestAvailability.unknown,
+            availabilityLabel: "No workers",
+            onDelete: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (dctx) => AlertDialog(
+                  title: const Text("Delete request?"),
+                  content: const Text("This will delete this booking request."),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => Navigator.pop(dctx, true),
+                      child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+              await brRepo.deleteRequest(requestId);
+            },
+            onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
+          );
+        }
+
+        // compute earliest among workers
+        DateTime? best;
+        final ranges = _extractRanges(br);
+        final preferredDays = (br['preferredDays'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+
+        final parsedDays = preferredDays
+            .map((k) => BookingRequestUtils.parseYyyymmdd(k))
+            .whereType<DateTime>()
+            .toList()
+          ..sort((a, b) => a.compareTo(b));
+
+        final durMin = _requestedDurationMin(br);
+        final allowedOverlap = _allowedOverlapMin(durMin);
+
+        for (final day in parsedDays) {
+          for (final wid in workerIds) {
+            final first = _firstSlotOnDayForWorker(
+              day: day,
+              ranges: ranges,
+              durMin: durMin,
+              workerId: wid,
+              allowedOverlap: allowedOverlap,
+              appts: appointmentsDocs,
+            );
+            if (first != null) {
+              if (best == null || first.isBefore(best)) best = first;
+            }
+          }
+          if (best != null) break; // earliest day already has a slot
+        }
+
+        final status = (best == null)
+            ? BookingRequestAvailability.unavailable
+            : BookingRequestAvailability.available;
+
+        final label = _pillLabelForRequest(status, best);
+
+        return BookingRequestCard(
+          requestId: requestId,
+          br: br,
+          purple: kPurple,
+          availability: status,
+          availabilityLabel: label,
+          onDelete: () async {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (dctx) => AlertDialog(
+                title: const Text("Delete request?"),
+                content: const Text("This will delete this booking request."),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text("No")),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: () => Navigator.pop(dctx, true),
+                    child: const Text("Delete", style: TextStyle(color: Colors.white)),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+            if (ok != true) return;
+            await brRepo.deleteRequest(requestId);
+          },
+          onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
         );
-        if (ok != true) return;
-        await brRepo.deleteRequest(requestId);
       },
-      onEditRequest: () => _editRequestSheet(requestId: requestId, br: br),
     );
   }
 
@@ -874,15 +1524,54 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                   return;
                 }
 
-                final doc = await FirebaseFirestore.instance.collection('services').doc(serviceId).get();
+                final doc = await FirebaseFirestore.instance
+                    .collection('services')
+                    .doc(serviceId)
+                    .get();
+
                 final data = doc.data() ?? const <String, dynamic>{};
                 final dur = (data['durationMin'] is num) ? (data['durationMin'] as num).toInt() : 30;
 
+                // ✅ Aplicar SIEMPRE el procedimiento (nunca se desmarca)
                 setState(() {
                   _selectedServiceId = serviceId;
                   _selectedServiceData = data;
                   _selectedDurationMin = dur;
                 });
+
+                // 🔎 Rangos incompatibles -> se borran (con confirmación SOLO OK)
+                final badIdx = <int>[];
+                for (int i = 0; i < _selectedRanges.length; i++) {
+                  if (!_rangeFitsDuration(_selectedRanges[i], dur)) badIdx.add(i);
+                }
+                if (badIdx.isEmpty || !mounted) return;
+
+                await showDialog<void>(
+                  context: context,
+                  builder: (dctx) => AlertDialog(
+                    title: const Text("Rangos demasiado pequeños"),
+                    content: Text(
+                      "Este procedimiento necesita ${dur} min.\n\n"
+                      "Se eliminarán ${badIdx.length} rango(s) que no tienen suficiente tiempo.",
+                    ),
+                    actions: [
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(dctx),
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+
+                setState(() {
+                  for (final i in badIdx.reversed) {
+                    _selectedRanges.removeAt(i);
+                  }
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Se eliminaron rangos incompatibles (mínimo ${dur} min).")),
+                );
               },
 
               selectedDays: _selectedDayKeys,
@@ -916,12 +1605,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     String fmtTs(dynamic v) {
       if (v is Timestamp) {
         final d = v.toDate();
-        final dd = d.day.toString().padLeft(2, '0');
-        final mm = d.month.toString().padLeft(2, '0');
-        final yy = d.year.toString();
-        final hh = d.hour.toString().padLeft(2, '0');
-        final mi = d.minute.toString().padLeft(2, '0');
-        return "$dd/$mm/$yy • $hh:$mi";
+        return "${_fmtDdMmYyyy(d)} • ${_fmtHm(d)}";
       }
       return "—";
     }
@@ -1001,7 +1685,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
         return StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
           stream: requestsStream,
           builder: (context, reqSnap) {
-            final activeDocs = wantsRequests ? (reqSnap.data ?? const []) : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final activeDocs =
+                wantsRequests ? (reqSnap.data ?? const []) : const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
             final screenH = MediaQuery.of(context).size.height;
 
             final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
@@ -1056,7 +1741,9 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                     const SizedBox(height: 14),
                     Expanded(
                       child: SingleChildScrollView(
-                        physics: allowOuterScroll ? const ClampingScrollPhysics() : const NeverScrollableScrollPhysics(),
+                        physics: allowOuterScroll
+                            ? const ClampingScrollPhysics()
+                            : const NeverScrollableScrollPhysics(),
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: (widget.mode == HomeAdminMode.looking)
@@ -1067,9 +1754,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
                                     for (final d in activeDocs) {
                                       final br = d.data();
-                                      final days = (br['preferredDays'] as List?)
-                                              ?.map((e) => e.toString())
-                                              .toList() ??
+                                      final days = (br['preferredDays'] as List?)?.map((e) => e.toString()).toList() ??
                                           const <String>[];
                                       for (final dayKey in days) {
                                         final dt = BookingRequestUtils.parseYyyymmdd(dayKey);
@@ -1089,13 +1774,16 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
                                     final q = FirebaseFirestore.instance
                                         .collection('appointments')
-                                        .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay)))
-                                        .where('appointmentDate', isLessThan: Timestamp.fromDate(_endExclusive(maxDay)));
+                                        .where('appointmentDate',
+                                            isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay)))
+                                        .where('appointmentDate',
+                                            isLessThan: Timestamp.fromDate(_endExclusive(maxDay)));
 
                                     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                                       stream: q.snapshots(),
                                       builder: (context, apptSnap) {
-                                        final apptDocs = apptSnap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                                        final apptDocs = apptSnap.data?.docs ??
+                                            const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
                                         return _lookingBody(
                                           client: data,
                                           activeRequestDocs: activeDocs,

@@ -91,4 +91,7 @@ class BookingRequestUtils {
     final workerPart = (workerId == null || workerId.trim().isEmpty) ? "" : "_${slug(workerId)}";
     return "${datePart}_${clientPart}_${servicePart}${workerPart}_request";
   }
+
+  static String hhmm(TimeOfDay t) =>
+    "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
 }

@@ -280,7 +280,8 @@ class BookingRequestRepo {
         final rs = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
         final re = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
         if (rs < 0 || re <= rs) continue;
-        if (overlaps(apptStartMin, apptEndMin, rs, re)) return true;
+        // ✅ debe CABER entero en el rango (no basta con que empiece dentro)
+        if (apptStartMin >= rs && apptEndMin <= re) return true;
       }
       return false;
     }
