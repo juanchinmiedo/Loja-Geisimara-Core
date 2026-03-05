@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:salon_app/utils/date_labels.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
 typedef TapAppt = void Function(String id, Map<String, dynamic> data);
 typedef TapEmpty = void Function(DateTime day, TimeOfDay tod);
@@ -428,8 +429,10 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
         final xBase = day * colW;
         final x = xBase + (e.colIndex * slotW);
 
-        final color =
-            widget.serviceColorById[e.serviceId] ?? const Color(0xff721c80);
+        final isPending = PendingConfirmationUtils.isPending(e.data);
+        final color = isPending
+            ? PendingConfirmationUtils.pendingColor
+            : (widget.serviceColorById[e.serviceId] ?? const Color(0xff721c80));
 
         out.add(
           Positioned(
@@ -439,6 +442,7 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
             height: h - 4,
             child: _ApptBlock(
               color: color,
+              isPending: isPending,
               title: e.serviceName.isNotEmpty ? e.serviceName : e.clientName,
               subtitle: e.serviceName.isNotEmpty ? e.clientName : '',
               onTap: () => widget.onTapAppointment(e.id, e.data),
@@ -719,12 +723,14 @@ class _EmptyTapLayer extends StatelessWidget {
 class _ApptBlock extends StatelessWidget {
   const _ApptBlock({
     required this.color,
+    required this.isPending,
     required this.title,
     required this.subtitle,
     required this.onTap,
   });
 
   final Color color;
+  final bool isPending;
   final String title;     // procedimiento (service)
   final String subtitle;  // cliente
   final VoidCallback onTap;
@@ -760,7 +766,7 @@ class _ApptBlock extends StatelessWidget {
           final t = client.isNotEmpty ? firstWord(client) : service;
           return _OneLineMiniBlock(
             color: color,
-            text: t,
+            text: isPending ? '⏳ $t' : t,
             fontSize: 8.2,
             onTap: onTap,
           );
@@ -771,7 +777,7 @@ class _ApptBlock extends StatelessWidget {
           // aquí SI dejamos nombre completo con ellipsis (queda mejor)
           return _OneLineMiniBlock(
             color: color,
-            text: clientOrService,
+            text: isPending ? '⏳ $clientOrService' : clientOrService,
             fontSize: 9.0,
             onTap: onTap,
           );
@@ -807,7 +813,7 @@ class _ApptBlock extends StatelessWidget {
                   children: [
                     // ✅ procedimiento
                     Text(
-                      service,
+                      isPending ? '⏳ $service' : service,
                       maxLines: 1, // 45m: mejor 1 línea para asegurar
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -860,7 +866,7 @@ class _ApptBlock extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      title,
+                      isPending ? '⏳ $title' : title,
                       maxLines: showSubtitle ? 2 : 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

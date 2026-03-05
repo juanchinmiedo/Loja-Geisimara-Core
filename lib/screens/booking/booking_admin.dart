@@ -10,6 +10,7 @@ import 'package:salon_app/components/pretty_date_strip.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 
 import 'package:salon_app/utils/localization_helper.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
 import 'package:salon_app/widgets/worker_selector_pills.dart';
 import 'package:salon_app/widgets/booking_view_toggle.dart';
@@ -623,6 +624,7 @@ class _AdminAppointmentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = (doc.data() as Map<String, dynamic>? ?? {});
+    final isPending = PendingConfirmationUtils.isPending(data);
     final dt = _ts(data, 'appointmentDate');
 
     final durationMin = _i(data, 'durationMin');
@@ -660,9 +662,13 @@ class _AdminAppointmentTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isPending ? PendingConfirmationUtils.pendingCardBg : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xff721c80).withOpacity(0.15)),
+          border: Border.all(
+            color: isPending
+                ? PendingConfirmationUtils.pendingColor.withOpacity(0.40)
+                : const Color(0xff721c80).withOpacity(0.15),
+          ),
           boxShadow: const [
             BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
           ],
@@ -720,6 +726,24 @@ class _AdminAppointmentTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (isPending) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: PendingConfirmationUtils.pendingColor.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'Pending confirmation',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 2),
                   Text(
                     contact.isEmpty ? clientName : "$clientName • $contact",

@@ -11,6 +11,7 @@ import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 import 'package:salon_app/utils/localization_helper.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
 import 'package:salon_app/components/bounded_time_picker.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/services/conflict_service.dart';
@@ -58,6 +59,9 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
 
   bool existingClientMode = true;
   bool saving = false;
+
+  /// ✅ Admin reservation mode: client has NOT confirmed the time yet.
+  bool pendingConfirmation = false;
 
   // Existing
   final clientSearchCtrl = TextEditingController();
@@ -532,6 +536,101 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                           ),
                         ),
                       ],
+                    ),
+                  ),
+
+                  // ✅ RESERVATION TOGGLE (pending confirmation)
+                  const SizedBox(height: 10),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: saving
+                        ? null
+                        : () {
+                            _unfocus();
+                            setState(() => pendingConfirmation = !pendingConfirmation);
+                            final msg = pendingConfirmation
+                                ? 'Marked as reservation: pending client confirmation.'
+                                : 'Marked as confirmed appointment.';
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(SnackBar(content: Text(msg)));
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: pendingConfirmation
+                            ? PendingConfirmationUtils.pendingCardBg
+                            : Colors.grey.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: pendingConfirmation
+                              ? PendingConfirmationUtils.pendingColor.withOpacity(0.55)
+                              : Colors.grey.withOpacity(0.20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              color: pendingConfirmation
+                                  ? const Color(0xff721c80)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: pendingConfirmation
+                                    ? const Color(0xff721c80)
+                                    : Colors.black26,
+                                width: 1.6,
+                              ),
+                            ),
+                            child: pendingConfirmation
+                                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Reservation (pending confirmation)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: pendingConfirmation
+                                        ? Colors.black87
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  pendingConfirmation
+                                      ? 'Client still needs to confirm this time.'
+                                      : 'Time is confirmed.',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (pendingConfirmation)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: PendingConfirmationUtils.pendingColor.withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'PENDING',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.black87,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -1030,6 +1129,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                             'total': basePrice,
 
                             'status': 'scheduled',
+                            PendingConfirmationUtils.kField: pendingConfirmation,
                             'appointmentDate': Timestamp.fromDate(dt),
 
                             'workerId': workerId,

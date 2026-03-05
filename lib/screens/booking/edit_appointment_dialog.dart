@@ -17,6 +17,7 @@ import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
 class EditAppointmentDialog extends StatefulWidget {
   const EditAppointmentDialog({
@@ -45,6 +46,9 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     with SingleTickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
   bool saving = false;
+
+  /// ✅ Admin reservation mode: client has NOT confirmed the time yet.
+  late bool pendingConfirmation;
 
   late TimeOfDay selectedTime;
 
@@ -115,6 +119,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     final originalTs = widget.data['appointmentDate'];
     final originalDt = originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
     selectedTime = TimeOfDay(hour: originalDt.hour, minute: originalDt.minute);
+
+    pendingConfirmation = PendingConfirmationUtils.isPending(widget.data);
 
     // Service init
     final currentServiceId = (widget.data['serviceId'] ?? '').toString();
@@ -540,6 +546,96 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                 ),
                 const SizedBox(height: 12),
 
+                // ✅ RESERVATION TOGGLE (pending confirmation)
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: saving
+                      ? null
+                      : () {
+                          setState(() => pendingConfirmation = !pendingConfirmation);
+                          final msg = pendingConfirmation
+                              ? 'Marked as reservation: pending client confirmation.'
+                              : 'Marked as confirmed appointment.';
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(msg)));
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: pendingConfirmation
+                          ? PendingConfirmationUtils.pendingCardBg
+                          : Colors.grey.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: pendingConfirmation
+                            ? PendingConfirmationUtils.pendingColor.withOpacity(0.55)
+                            : Colors.grey.withOpacity(0.20),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            color: pendingConfirmation
+                                ? const Color(0xff721c80)
+                                : Colors.transparent,
+                            border: Border.all(
+                              color: pendingConfirmation
+                                  ? const Color(0xff721c80)
+                                  : Colors.black26,
+                              width: 1.6,
+                            ),
+                          ),
+                          child: pendingConfirmation
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Reservation (pending confirmation)',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                pendingConfirmation
+                                    ? 'Client still needs to confirm this time.'
+                                    : 'Time is confirmed.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (pendingConfirmation)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: PendingConfirmationUtils.pendingColor.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'PENDING',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black87,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
                 ServiceTypeSelectors(
                   services: widget.services,
                   selectedServiceId: selectedServiceId,
@@ -784,6 +880,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             if (canCheckConflicts && existingWorkerId.isEmpty) 'workerId': effectiveWorkerId,
 
                             'appointmentDate': Timestamp.fromDate(dt),
+                            PendingConfirmationUtils.kField: pendingConfirmation,
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
 

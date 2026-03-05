@@ -10,6 +10,7 @@ import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
 class PastAppointmentDialog extends StatefulWidget {
   const PastAppointmentDialog({
@@ -442,6 +443,8 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
       ig.isNotEmpty ? "@$ig" : null,
     ].whereType<String>().join(' • ');
 
+    final isPending = PendingConfirmationUtils.isPending(widget.data);
+
     final width = MediaQuery.of(context).size.width;
     final maxDialogWidth = (width * 0.92).clamp(280.0, 440.0);
 
@@ -491,6 +494,24 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
                       Text(clientName, style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 4),
                       Text(contact, style: TextStyle(color: Colors.grey[700])),
+                      if (isPending) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: PendingConfirmationUtils.pendingColor.withOpacity(0.22),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'Pending confirmation (reservation)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
