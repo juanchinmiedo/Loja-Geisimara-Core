@@ -114,7 +114,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "gelA": MessageLookupByLibrary.simpleMessage("Aplicação de Gel"),
         "gelM": MessageLookupByLibrary.simpleMessage("Manutenção de Gel"),
         "gelVarnish":
-            MessageLookupByLibrary.simpleMessage("Reforço com Verniz de Gel"),
+            MessageLookupByLibrary.simpleMessage("Verniz de Gel com Reforço"),
         "gelVarnishPedicure":
             MessageLookupByLibrary.simpleMessage("Pedicure com Verniz de Gel"),
         "googleLoginSuccess":

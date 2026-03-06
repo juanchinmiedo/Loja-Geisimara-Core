@@ -122,26 +122,6 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
     return x.difference(ws).inDays; // 0..6
   }
 
-  // snap :00 / :30
-  TimeOfDay _snapToHalfHour(double y) {
-    final minutesFromStart = (y / _hourRowH) * 60.0;
-    final totalMin = (widget.startHour * 60) + minutesFromStart.round();
-
-    int h = (totalMin ~/ 60);
-    int m = (totalMin % 60);
-
-    if (m < 15) {
-      m = 0;
-    } else if (m < 45) {
-      m = 30;
-    } else {
-      m = 0;
-      h = (h + 1);
-    }
-
-    return TimeOfDay(hour: h, minute: m);
-  }
-
   Widget _timeLabel(BuildContext context, int hour) {
     return Align(
       alignment: Alignment.centerRight,
@@ -273,7 +253,7 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
                                                   weekStart: weekStart,
                                                   colW: colW,
                                                   rowH: _hourRowH,
-                                                  snapToHalfHour: _snapToHalfHour,
+                                                  startHour: widget.startHour,
                                                   onTap: (day, tod) async {
                                                     final now = DateTime.now();
                                                     final today = DateTime(
@@ -688,15 +668,15 @@ class _EmptyTapLayer extends StatelessWidget {
     required this.weekStart,
     required this.colW,
     required this.rowH,
+    required this.startHour,
     required this.onTap,
-    required this.snapToHalfHour,
   });
 
   final DateTime weekStart;
   final double colW;
   final double rowH;
+  final int startHour;
   final void Function(DateTime day, TimeOfDay tod) onTap;
-  final TimeOfDay Function(double y) snapToHalfHour;
 
   @override
   Widget build(BuildContext context) {
@@ -712,14 +692,21 @@ class _EmptyTapLayer extends StatelessWidget {
           weekStart.day + dayIndex,
         );
 
-        final tod = snapToHalfHour(local.dy);
+        final hourIndex = (local.dy / rowH).floor();
+        final hour = startHour + hourIndex;
+
+        final offsetInsideCell = local.dy % rowH;
+        final bool topHalf = offsetInsideCell < (rowH / 2);
+
+        final minute = topHalf ? 0 : 30;
+
+        final tod = TimeOfDay(hour: hour, minute: minute);
         onTap(day, tod);
       },
       child: const SizedBox.expand(),
     );
   }
 }
-
 class _ApptBlock extends StatelessWidget {
   const _ApptBlock({
     required this.color,

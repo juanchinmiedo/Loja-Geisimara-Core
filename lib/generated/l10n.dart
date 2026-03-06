@@ -140,10 +140,10 @@ class S {
     );
   }
 
-  /// `Reforço com Verniz de Gel`
+  /// `Verniz de Gel com Reforço`
   String get gelVarnish {
     return Intl.message(
-      'Reforço com Verniz de Gel',
+      'Verniz de Gel com Reforço',
       name: 'gelVarnish',
       desc: '',
       args: [],

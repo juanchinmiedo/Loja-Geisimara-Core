@@ -54,12 +54,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   static const int _bizEndMax = 21 * 60;
   static const int _minRangeLen = 15;      // mínimo 15 min
 
-  // Pickers clamp (keep sane values)
-  static const int _startMinClamp = _bizStartMin; // 07:00
-  static const int _startMaxClamp = 20 * 60; // latest "start" pick; real latest depends on duration
-  static const int _endMinClamp = 7 * 60 + 30; // 07:30 (UI convenience)
-  static const int _endMaxClamp = _bizEndMax; // 21:00
-
   Future<List<String>>? _workersFuture;
   List<String> _workerIdsCache = const [];
   
@@ -70,13 +64,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     final m = (minutes % 60).clamp(0, 59);
     return TimeOfDay(hour: h, minute: m);
   }
-
-  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
-    final v = _toMin(t);
-    final clamped = v.clamp(min, max);
-    return _fromMin(clamped);
-  }
-
+  
   // ===================== Range rules (Booking Requests) =====================
 
   int _roundUpToStep(int minutes, int step) {
@@ -250,19 +238,6 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
           ),
         );
       },
-    );
-  }
-
-  void _showStepHint(String text) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(milliseconds: 900),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      ),
     );
   }
 

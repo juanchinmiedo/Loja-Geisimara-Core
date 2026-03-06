@@ -224,12 +224,6 @@ class BookingRequestRepo {
     final apptStartMin = appointmentStart.hour * 60 + appointmentStart.minute;
     final apptEndMin = apptStartMin + appointmentDurationMin;
 
-    bool overlaps(int a0, int a1, int b0, int b1) {
-      final s = a0 > b0 ? a0 : b0;
-      final e = a1 < b1 ? a1 : b1;
-      return e > s;
-    }
-
     final catCache = <String, String>{};
 
     Future<String> _categoryForServiceId(String sid) async {
