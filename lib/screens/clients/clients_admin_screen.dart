@@ -17,6 +17,8 @@ import 'package:salon_app/widgets/booking_request_create_form.dart';
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
 
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/utils/app_time_picker.dart';
+import 'package:salon_app/utils/time_of_day_utils.dart';
 
 import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
@@ -260,19 +262,6 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   static const int _endMinClamp = 9 * 60;
   static const int _endMaxClamp = 21 * 60;
 
-  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
-
-  TimeOfDay _fromMin(int minutes) {
-    final h = (minutes ~/ 60).clamp(0, 23);
-    final m = (minutes % 60).clamp(0, 59);
-    return TimeOfDay(hour: h, minute: m);
-  }
-
-  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
-    final v = _toMin(t);
-    final clamped = v.clamp(min, max);
-    return _fromMin(clamped);
-  }
 
   Future<void> _addDay() async {
     final now = DateTime.now();
@@ -296,22 +285,22 @@ class _ClientBottomSheetState extends State<_ClientBottomSheet> {
   }
 
   Future<void> _addRange() async {
-    final start = await showTimePicker(
+    final start = await AppTimePicker.pick5m(
       context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      initial: const TimeOfDay(hour: 9, minute: 0),
     );
     if (start == null) return;
-    final fixedStart = _clampTime(start, _startMinClamp, _startMaxClamp);
+    final fixedStart = TimeOfDayUtils.clamp(start, minMinutes: _startMinClamp, maxMinutes: _startMaxClamp);
 
-    final minAllowed = (_toMin(fixedStart) < _endMinClamp) ? _endMinClamp : _toMin(fixedStart);
-    final end = await showTimePicker(
+    final minAllowed = (TimeOfDayUtils.toMinutes(fixedStart) < _endMinClamp) ? _endMinClamp : TimeOfDayUtils.toMinutes(fixedStart);
+    final end = await AppTimePicker.pick5m(
       context: context,
-      initialTime: _fromMin(minAllowed),
+      initial: TimeOfDayUtils.fromMinutes(minAllowed),
     );
     if (end == null) return;
-    var fixedEnd = _clampTime(end, _endMinClamp, _endMaxClamp);
-    if (_toMin(fixedEnd) < _toMin(fixedStart)) {
-      fixedEnd = _clampTime(fixedStart, _endMinClamp, _endMaxClamp);
+    var fixedEnd = TimeOfDayUtils.clamp(end, minMinutes: _endMinClamp, maxMinutes: _endMaxClamp);
+    if (TimeOfDayUtils.isBefore(fixedEnd, fixedStart)) {
+      fixedEnd = TimeOfDayUtils.clamp(fixedStart, minMinutes: _endMinClamp, maxMinutes: _endMaxClamp);
     }
 
     setState(() {
@@ -718,15 +707,15 @@ if (hasSameCategory) {
                     },
                     onRemoveDayKey: (k) => setLocal(() => dayKeys.remove(k)),
                     onAddRange: () async {
-                      final start = await showTimePicker(
+                      final start = await AppTimePicker.pick5m(
                         context: ctx,
-                        initialTime: const TimeOfDay(hour: 9, minute: 0),
+                        initial: const TimeOfDay(hour: 9, minute: 0),
                       );
                       if (start == null) return;
                       final sMin = start.hour * 60 + start.minute;
-                      final end = await showTimePicker(
+                      final end = await AppTimePicker.pick5m(
                         context: ctx,
-                        initialTime: TimeOfDay(hour: (sMin ~/ 60).clamp(0, 23), minute: (sMin % 60).clamp(0, 59)),
+                        initial: TimeOfDay(hour: (sMin ~/ 60).clamp(0, 23), minute: (sMin % 60).clamp(0, 59)),
                       );
                       if (end == null) return;
                       final eMin = end.hour * 60 + end.minute;

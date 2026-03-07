@@ -18,6 +18,13 @@ class DateTimeUtils {
     return DateTime(y, m, d);
   }
 
+  static String formatDdMmYyyy(DateTime dt) {
+    final dd = dt.day.toString().padLeft(2, '0');
+    final mm = dt.month.toString().padLeft(2, '0');
+    final yy = dt.year.toString();
+    return '$dd/$mm/$yy';
+  }
+
   static String formatYyyyMmDdToDdMmYyyy(String yyyymmdd) {
     if (yyyymmdd.length != 8) return yyyymmdd;
     final y = yyyymmdd.substring(0, 4);
@@ -27,6 +34,10 @@ class DateTimeUtils {
   }
 
   static int minutesFromMidnight(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  static String formatTimeOfDay(TimeOfDay t) {
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
 
   static String hhmmFromMinutes(int minutes) {
     final h = (minutes ~/ 60).toString().padLeft(2, '0');

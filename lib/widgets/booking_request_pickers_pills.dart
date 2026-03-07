@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
+import 'package:salon_app/utils/app_time_picker.dart';
+import 'package:salon_app/utils/date_time_utils.dart';
+import 'package:salon_app/utils/time_of_day_utils.dart';
 
 class BookingRequestPickersPills extends StatelessWidget {
   const BookingRequestPickersPills({
@@ -30,26 +33,6 @@ class BookingRequestPickersPills extends StatelessWidget {
   static const int _endMin = 9 * 60;
   static const int _endMax = 21 * 60;
 
-  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
-
-  TimeOfDay _fromMin(int minutes) {
-    final h = (minutes ~/ 60).clamp(0, 23);
-    final m = (minutes % 60).clamp(0, 59);
-    return TimeOfDay(hour: h, minute: m);
-  }
-
-  TimeOfDay _clampTime(TimeOfDay t, int min, int max) {
-    final v = _toMin(t);
-    final clamped = v.clamp(min, max);
-    return _fromMin(clamped);
-  }
-
-  String _ddmmyyyy(DateTime d) {
-    final dd = d.day.toString().padLeft(2, '0');
-    final mm = d.month.toString().padLeft(2, '0');
-    final yy = d.year.toString();
-    return "$dd/$mm/$yy";
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,15 +54,15 @@ class BookingRequestPickersPills extends StatelessWidget {
 
         Future<void> pickStart() async {
           final initial = rangeStart ?? const TimeOfDay(hour: 9, minute: 0);
-          final t = await showTimePicker(context: context, initialTime: initial);
+          final t = await AppTimePicker.pick5m(context: context, initial: initial);
           if (t == null) return;
 
-          final fixedStart = _clampTime(t, _startMin, _startMax);
+          final fixedStart = TimeOfDayUtils.clamp(t, minMinutes: _startMin, maxMinutes: _startMax);
           onStartChanged(fixedStart);
 
           // si end existe y queda < start => empuja end hacia start
-          if (rangeEnd != null && _toMin(rangeEnd!) < _toMin(fixedStart)) {
-            final adjustedEnd = _clampTime(fixedStart, _endMin, _endMax);
+          if (rangeEnd != null && TimeOfDayUtils.isBefore(rangeEnd!, fixedStart)) {
+            final adjustedEnd = TimeOfDayUtils.clamp(fixedStart, minMinutes: _endMin, maxMinutes: _endMax);
             onEndChanged(adjustedEnd);
           }
         }
@@ -87,21 +70,21 @@ class BookingRequestPickersPills extends StatelessWidget {
         Future<void> pickEnd() async {
           TimeOfDay initial;
           if (rangeStart != null) {
-            final startMin = _toMin(rangeStart!);
+            final startMin = TimeOfDayUtils.toMinutes(rangeStart!);
             final minAllowed = startMin < _endMin ? _endMin : startMin;
-            initial = _fromMin(minAllowed);
+            initial = TimeOfDayUtils.fromMinutes(minAllowed);
           } else {
             initial = rangeEnd ?? const TimeOfDay(hour: 12, minute: 0);
           }
 
-          final t = await showTimePicker(context: context, initialTime: initial);
+          final t = await AppTimePicker.pick5m(context: context, initial: initial);
           if (t == null) return;
 
-          final fixedEnd = _clampTime(t, _endMin, _endMax);
+          final fixedEnd = TimeOfDayUtils.clamp(t, minMinutes: _endMin, maxMinutes: _endMax);
 
           // ensure end >= start
-          if (rangeStart != null && _toMin(fixedEnd) < _toMin(rangeStart!)) {
-            onEndChanged(_clampTime(rangeStart!, _endMin, _endMax));
+          if (rangeStart != null && TimeOfDayUtils.isBefore(fixedEnd, rangeStart!)) {
+            onEndChanged(TimeOfDayUtils.clamp(rangeStart!, minMinutes: _endMin, maxMinutes: _endMax));
           } else {
             onEndChanged(fixedEnd);
           }
@@ -121,7 +104,7 @@ class BookingRequestPickersPills extends StatelessWidget {
             color: purple,
             icon: Icons.calendar_month,
             showIcon: showIcons,
-            label: _ddmmyyyy(preferredDay!),
+            label: DateTimeUtils.formatDdMmYyyy(preferredDay!),
             shadow: false,
             onTap: pickDay,
           );

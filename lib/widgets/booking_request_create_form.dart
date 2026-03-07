@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'package:salon_app/components/service_type_selectors.dart';
 
 import 'package:salon_app/widgets/booking_request_multi_pickers_pills.dart';
 import 'package:salon_app/widgets/worker_choice_pills.dart';
+import 'package:salon_app/utils/keyboard_utils.dart';
 
 /// Simple create form:
 /// - Procedure dropdown (required)
@@ -64,8 +64,7 @@ class BookingRequestCreateForm extends StatelessWidget {
 
             return Listener(
               onPointerDown: (_) {
-                FocusManager.instance.primaryFocus?.unfocus();
-                SystemChannels.textInput.invokeMethod('TextInput.hide');
+                KeyboardUtils.hide();
               },
               child: ServiceTypeSelectors(
                 services: docs, // ✅ lista de services (QueryDocumentSnapshot)
@@ -117,7 +116,7 @@ class BookingRequestCreateForm extends StatelessWidget {
             ),
             onPressed: () {
               FocusScope.of(context).unfocus();
-              FocusManager.instance.primaryFocus?.unfocus();
+              KeyboardUtils.unfocus();
               onCreate();
             },
             icon: const Icon(Icons.check, color: Colors.white),

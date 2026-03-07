@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/user_provider.dart';
 
-import 'package:salon_app/components/bounded_time_picker.dart';
 import 'package:salon_app/services/conflict_service.dart';
+import 'package:salon_app/utils/app_time_picker.dart';
+import 'package:salon_app/utils/business_hours_utils.dart';
+import 'package:salon_app/utils/keyboard_utils.dart';
+import 'package:salon_app/utils/pending_confirmation_utils.dart';
+import 'package:salon_app/utils/service_types_utils.dart';
+import 'package:salon_app/widgets/pending_confirmation_toggle.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/generated/l10n.dart';
 
@@ -17,7 +21,6 @@ import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
-import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
 class EditAppointmentDialog extends StatefulWidget {
   const EditAppointmentDialog({
@@ -46,8 +49,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     with SingleTickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
   bool saving = false;
-
-  /// ✅ Admin reservation mode: client has NOT confirmed the time yet.
   late bool pendingConfirmation;
 
   late TimeOfDay selectedTime;
@@ -71,33 +72,11 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   late final AppointmentService _apptService;
   late final BookingRequestRepo _brRepo;
 
-  // =========================
-  // ⏱️ BUSINESS HOURS (NEW)
-  // =========================
-  static const int _kMinStartMin = 7 * 60; // 07:00
-  static const int _kMaxEndMin = 21 * 60; // 21:00
-
-  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
-
-  TimeOfDay _fromMin(int m) {
-    final mm = m.clamp(0, 24 * 60 - 1);
-    return TimeOfDay(hour: mm ~/ 60, minute: mm % 60);
-  }
-
-  /// Clamp:
-  /// - start >= 07:00
-  /// - end <= 21:00 (shift start back if needed)
   TimeOfDay _clampStartToBusinessHours(TimeOfDay picked, int durationMin) {
-    int start = _toMin(picked);
-
-    if (start < _kMinStartMin) start = _kMinStartMin;
-
-    int latestStart = _kMaxEndMin - durationMin;
-    if (latestStart < _kMinStartMin) latestStart = _kMinStartMin;
-
-    if (start > latestStart) start = latestStart;
-
-    return _fromMin(start);
+    return BusinessHoursUtils.clampStartToBusinessHours(
+      picked,
+      durationMin: durationMin,
+    );
   }
 
   @override
@@ -115,12 +94,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
 
+    pendingConfirmation = PendingConfirmationUtils.isPending(widget.data);
+
     // Time init
     final originalTs = widget.data['appointmentDate'];
     final originalDt = originalTs is Timestamp ? originalTs.toDate() : DateTime.now();
     selectedTime = TimeOfDay(hour: originalDt.hour, minute: originalDt.minute);
-
-    pendingConfirmation = PendingConfirmationUtils.isPending(widget.data);
 
     // Service init
     final currentServiceId = (widget.data['serviceId'] ?? '').toString();
@@ -187,39 +166,14 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
     }
 
     if (mounted) setState(() => loadingTypes = true);
-
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('services')
-          .doc(sid)
-          .collection('types')
-          .get();
-
-      final types = snap.docs.map((d) {
-        final m = d.data();
-        return {
-          ...m,
-          '_id': d.id,
-        };
-      }).toList(growable: false);
-
-      bool isCommon(Map<String, dynamic> t) => t['common'] == true;
-
-      types.sort((a, b) {
-        final ac = isCommon(a) ? 0 : 1;
-        final bc = isCommon(b) ? 0 : 1;
-        if (ac != bc) return ac - bc;
-
-        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '').toString().toLowerCase();
-        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '').toString().toLowerCase();
-        return al.compareTo(bl);
-      });
-
+      final types = await ServiceTypesUtils.loadSortedTypes(
+        firestore: FirebaseFirestore.instance,
+        serviceId: sid,
+      );
       if (!mounted) return;
-
       setState(() {
         serviceTypes = types;
-
         if (types.isEmpty) {
           selectedType = null;
           selectedTypeKey = '';
@@ -228,12 +182,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
         }
 
         if (!autoPickCommon) return;
-
-        final common = types.firstWhere(
-          (t) => t['common'] == true,
-          orElse: () => types.first,
-        );
-
+        final common = ServiceTypesUtils.pickDefaultType(types)!;
         selectedType = common;
         selectedTypeId = (common['_id'] ?? '').toString();
         selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
@@ -254,58 +203,41 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
   void _autoPickExistingOrCommonType() {
     if (serviceTypes.isEmpty) return;
 
-    if (selectedTypeId.isNotEmpty) {
-      final match = serviceTypes.where((t) => (t['_id'] ?? '').toString() == selectedTypeId).toList();
-      if (match.isNotEmpty) {
-        selectedType = match.first;
-        return;
-      }
+    final byId = ServiceTypesUtils.findById(serviceTypes, selectedTypeId);
+    if (byId != null) {
+      selectedType = byId;
+      return;
     }
 
-    if (selectedTypeKey.isNotEmpty) {
-      final match = serviceTypes.where((t) {
-        final key = (t['nameKey'] ?? t['_id'] ?? t['key'] ?? '').toString();
-        return key == selectedTypeKey;
-      }).toList();
-      if (match.isNotEmpty) {
-        selectedType = match.first;
-        selectedTypeId = (match.first['_id'] ?? '').toString();
-        return;
-      }
+    final byKey = ServiceTypesUtils.findByKey(serviceTypes, selectedTypeKey);
+    if (byKey != null) {
+      selectedType = byKey;
+      selectedTypeId = (byKey['_id'] ?? '').toString();
+      return;
     }
 
-    final common = serviceTypes.firstWhere(
-      (t) => t['common'] == true,
-      orElse: () => serviceTypes.first,
-    );
+    final common = ServiceTypesUtils.pickDefaultType(serviceTypes)!;
     selectedType = common;
     selectedTypeId = (common['_id'] ?? '').toString();
     selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // PRICE & TIME (SMART)
-  // ─────────────────────────────────────────────────────────────
   bool _hasLoadedTypes() => serviceTypes.isNotEmpty;
 
   double _finalPriceSmart(Map<String, dynamic>? svc, Map<String, dynamic>? type) {
-    final base = svc?['price'];
-    final baseD = base is num ? base.toDouble() : 0.0;
-
-    if (!_hasLoadedTypes()) return baseD;
-
-    final extra = type?['extraPrice'];
-    final extraD = extra is num ? extra.toDouble() : 0.0;
-    return baseD + extraD;
+    return ServiceTypesUtils.finalPriceSmart(
+      service: svc,
+      type: type,
+      loadedTypes: serviceTypes,
+    );
   }
 
   int _finalMinutesSmart(Map<String, dynamic>? svc, Map<String, dynamic>? type) {
-    if (_hasLoadedTypes()) {
-      final v = type?['durationMin'];
-      return v is num ? v.toInt() : 0;
-    }
-    final v = svc?['durationMin'];
-    return v is num ? v.toInt() : 0;
+    return ServiceTypesUtils.finalMinutesSmart(
+      service: svc,
+      type: type,
+      loadedTypes: serviceTypes,
+    );
   }
 
   Future<void> _ensureServiceLoaded() async {
@@ -546,92 +478,16 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                 ),
                 const SizedBox(height: 12),
 
-                // ✅ RESERVATION TOGGLE (pending confirmation)
-                InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: saving
-                      ? null
-                      : () {
-                          setState(() => pendingConfirmation = !pendingConfirmation);
-                          final msg = pendingConfirmation
-                              ? 'Marked as reservation: pending client confirmation.'
-                              : 'Marked as confirmed appointment.';
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text(msg)));
-                        },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: pendingConfirmation
-                          ? PendingConfirmationUtils.pendingCardBg
-                          : Colors.grey.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: pendingConfirmation
-                            ? PendingConfirmationUtils.pendingColor.withOpacity(0.55)
-                            : Colors.grey.withOpacity(0.20),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: pendingConfirmation
-                                ? const Color(0xff721c80)
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: pendingConfirmation
-                                  ? const Color(0xff721c80)
-                                  : Colors.black26,
-                              width: 1.6,
-                            ),
-                          ),
-                          child: pendingConfirmation
-                              ? const Icon(Icons.check, size: 16, color: Colors.white)
-                              : null,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Reservation (pending confirmation)',
-                                style: TextStyle(fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                pendingConfirmation
-                                    ? 'Client still needs to confirm this time.'
-                                    : 'Time is confirmed.',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (pendingConfirmation)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: PendingConfirmationUtils.pendingColor.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'PENDING',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.black87,
-                                letterSpacing: 0.4,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                PendingConfirmationToggle(
+                  value: pendingConfirmation,
+                  enabled: !saving,
+                  onChanged: (value) {
+                    setState(() => pendingConfirmation = value);
+                    final msg = value
+                        ? 'Marked as reservation: pending client confirmation.'
+                        : 'Marked as confirmed appointment.';
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                  },
                 ),
 
                 const SizedBox(height: 12),
@@ -683,15 +539,13 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                   onTap: () async {
                     // hide keyboard defensively
                     FocusManager.instance.primaryFocus?.unfocus();
-                    SystemChannels.textInput.invokeMethod('TextInput.hide');
+                    KeyboardUtils.hide();
 
-                    final picked = await BoundedTimePicker.show(
+                    final picked = await AppTimePicker.pick5m(
                       context: context,
-                      initialTime: selectedTime,
-                      minuteStep: 5,
-                      use24h: true,
-                      hapticsOnSnap: true,
-                      onSnapped: (_, __) {
+                      initial: selectedTime,
+                      bounded: true,
+                      onSnap: () {
                         if (mounted) _pulseTime();
                       },
                     );

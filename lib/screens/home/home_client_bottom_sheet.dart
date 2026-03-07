@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/admin_nav_provider.dart';
 
@@ -15,7 +15,9 @@ import 'package:salon_app/widgets/booking_request_create_form.dart';
 import 'package:salon_app/widgets/async_optimistic_switch.dart';
 
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/utils/app_time_picker.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
+import 'package:salon_app/utils/time_of_day_utils.dart';
 
 enum HomeAdminMode { looking, cancelled, noShow }
 
@@ -57,21 +59,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   Future<List<String>>? _workersFuture;
   List<String> _workerIdsCache = const [];
   
-  int _toMin(TimeOfDay t) => t.hour * 60 + t.minute;
-
-  TimeOfDay _fromMin(int minutes) {
-    final h = (minutes ~/ 60).clamp(0, 23);
-    final m = (minutes % 60).clamp(0, 59);
-    return TimeOfDay(hour: h, minute: m);
-  }
-  
   // ===================== Range rules (Booking Requests) =====================
-
-  int _roundUpToStep(int minutes, int step) {
-    if (step <= 1) return minutes;
-    final r = minutes % step;
-    return r == 0 ? minutes : minutes + (step - r);
-  }
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -79,7 +67,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   int _nowMinRounded({required int step}) {
     final now = DateTime.now();
     final m = now.hour * 60 + now.minute;
-    return _roundUpToStep(m, step);
+    return TimeOfDayUtils.roundUpMinutes(m, step: step);
   }
 
   /// Start initial:
@@ -107,14 +95,14 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
       startMin = _bizEndMax - _minRangeLen;
     }
 
-    return _fromMin(startMin);
+    return TimeOfDayUtils.fromMinutes(startMin);
   }
 
   /// End initial siempre = start + 15
   TimeOfDay _initialEndFromStart(TimeOfDay start) {
-    final s = _toMin(start);
+    final s = TimeOfDayUtils.toMinutes(start);
     final e = (s + _minRangeLen).clamp(_bizStartMin + _minRangeLen, _bizEndMax);
-    return _fromMin(e);
+    return TimeOfDayUtils.fromMinutes(e);
   }
 
   /// Ajusta start/end a reglas:
@@ -122,8 +110,8 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
   /// - end <= 21:00
   /// - end >= start + 15
   ({TimeOfDay start, TimeOfDay end}) _sanitizeRange(TimeOfDay start, TimeOfDay end) {
-    int s = _toMin(start);
-    int e = _toMin(end);
+    int s = TimeOfDayUtils.toMinutes(start);
+    int e = TimeOfDayUtils.toMinutes(end);
 
     if (s < _bizStartMin) s = _bizStartMin;
     if (e > _bizEndMax) e = _bizEndMax;
@@ -141,7 +129,7 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     if (e < minEnd2) e = minEnd2;
     if (e > _bizEndMax) e = _bizEndMax;
 
-    return (start: _fromMin(s), end: _fromMin(e));
+    return (start: TimeOfDayUtils.fromMinutes(s), end: TimeOfDayUtils.fromMinutes(e));
   }
 
   /// Comprueba si un rango (en minutos) puede contener un procedimiento de durationMin
@@ -283,17 +271,17 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
 
   Future<void> _addRange() async {
     // 1) START picker: por defecto 07:00 (o ahora si HOY está seleccionado)
-    final startPicked = await showTimePicker(
+    final startPicked = await AppTimePicker.pick5m(
       context: context,
-      initialTime: _initialStartTimeForRange(),
+      initial: _initialStartTimeForRange(),
     );
     if (startPicked == null) return;
 
     // Clamp start a 07:00..(21:00-15)
     TimeOfDay start = startPicked;
-    final sMin = _toMin(start);
+    final sMin = TimeOfDayUtils.toMinutes(start);
     final clampedSMin = sMin.clamp(_bizStartMin, _bizEndMax - _minRangeLen);
-    start = _fromMin(clampedSMin);
+    start = TimeOfDayUtils.fromMinutes(clampedSMin);
 
     // ✅ Overlay bonito entre pasos (se cierra solo)
     await Future.delayed(const Duration(milliseconds: 80));
@@ -314,9 +302,9 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
     await Future.delayed(const Duration(milliseconds: 120));
 
     // 2) END picker: preseleccionado start + 15
-    final endPicked = await showTimePicker(
+    final endPicked = await AppTimePicker.pick5m(
       context: context,
-      initialTime: _initialEndFromStart(start),
+      initial: _initialEndFromStart(start),
     );
     if (endPicked == null) return;
 
@@ -1070,20 +1058,20 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                           startMin = _bizEndMax - _minRangeLen;
                         }
 
-                        return _fromMin(startMin);
+                        return TimeOfDayUtils.fromMinutes(startMin);
                       }
 
-                      final startPicked = await showTimePicker(
+                      final startPicked = await AppTimePicker.pick5m(
                         context: ctx,
-                        initialTime: initialStart(),
+                        initial: initialStart(),
                       );
                       if (startPicked == null) return;
 
                       // clamp start a 07:00..(21:00-15)
                       TimeOfDay start = startPicked;
-                      final sMin = _toMin(start);
+                      final sMin = TimeOfDayUtils.toMinutes(start);
                       final clampedSMin = sMin.clamp(_bizStartMin, _bizEndMax - _minRangeLen);
-                      start = _fromMin(clampedSMin);
+                      start = TimeOfDayUtils.fromMinutes(clampedSMin);
 
                       // overlay bonito entre pasos
                       await Future.delayed(const Duration(milliseconds: 80));
@@ -1103,9 +1091,9 @@ class _HomeClientBottomSheetState extends State<HomeClientBottomSheet> {
                       await Future.delayed(const Duration(milliseconds: 120));
 
                       // 2) END: start + 15
-                      final endPicked = await showTimePicker(
+                      final endPicked = await AppTimePicker.pick5m(
                         context: ctx,
-                        initialTime: _initialEndFromStart(start),
+                        initial: _initialEndFromStart(start),
                       );
                       if (endPicked == null) return;
 

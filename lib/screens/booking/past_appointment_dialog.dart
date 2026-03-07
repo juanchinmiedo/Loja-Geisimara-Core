@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/utils/localization_helper.dart';
@@ -10,7 +10,7 @@ import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
-import 'package:salon_app/utils/pending_confirmation_utils.dart';
+import 'package:salon_app/utils/service_types_utils.dart';
 
 class PastAppointmentDialog extends StatefulWidget {
   const PastAppointmentDialog({
@@ -124,35 +124,12 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
     if (mounted) setState(() => loadingTypes = true);
 
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('services')
-          .doc(sid)
-          .collection('types')
-          .get();
-
-      final types = snap.docs.map((d) {
-        final m = d.data();
-        return {...m, '_id': d.id};
-      }).toList(growable: false);
-
-      bool isCommon(Map<String, dynamic> t) => t['common'] == true;
-
-      types.sort((a, b) {
-        final ac = isCommon(a) ? 0 : 1;
-        final bc = isCommon(b) ? 0 : 1;
-        if (ac != bc) return ac - bc;
-
-        final al = (a['label'] ?? a['name'] ?? a['_id'] ?? '')
-            .toString()
-            .toLowerCase();
-        final bl = (b['label'] ?? b['name'] ?? b['_id'] ?? '')
-            .toString()
-            .toLowerCase();
-        return al.compareTo(bl);
-      });
+      final types = await ServiceTypesUtils.loadSortedTypes(
+        firestore: FirebaseFirestore.instance,
+        serviceId: sid,
+      );
 
       if (!mounted) return;
-
       setState(() {
         serviceTypes = types;
 
@@ -165,16 +142,10 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
         if (!autoPickCommon) return;
 
-        final common = types.firstWhere(
-          (t) => t['common'] == true,
-          orElse: () => types.first,
-        );
-
+        final common = ServiceTypesUtils.pickDefaultType(types)!;
         selectedType = common;
         selectedTypeId = (common['_id'] ?? '').toString();
-        selectedTypeKey =
-            (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '')
-                .toString();
+        selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
       });
     } catch (_) {
       if (!mounted) return;
@@ -192,61 +163,41 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
   void _autoPickExistingOrCommonType() {
     if (serviceTypes.isEmpty) return;
 
-    if (selectedTypeId.isNotEmpty) {
-      final match = serviceTypes
-          .where((t) => (t['_id'] ?? '').toString() == selectedTypeId)
-          .toList();
-      if (match.isNotEmpty) {
-        selectedType = match.first;
-        return;
-      }
+    final byId = ServiceTypesUtils.findById(serviceTypes, selectedTypeId);
+    if (byId != null) {
+      selectedType = byId;
+      return;
     }
 
-    if (selectedTypeKey.isNotEmpty) {
-      final match = serviceTypes.where((t) {
-        final key = (t['nameKey'] ?? t['_id'] ?? t['key'] ?? '').toString();
-        return key == selectedTypeKey;
-      }).toList();
-      if (match.isNotEmpty) {
-        selectedType = match.first;
-        selectedTypeId = (match.first['_id'] ?? '').toString();
-        return;
-      }
+    final byKey = ServiceTypesUtils.findByKey(serviceTypes, selectedTypeKey);
+    if (byKey != null) {
+      selectedType = byKey;
+      selectedTypeId = (byKey['_id'] ?? '').toString();
+      return;
     }
 
-    final common = serviceTypes.firstWhere(
-      (t) => t['common'] == true,
-      orElse: () => serviceTypes.first,
-    );
+    final common = ServiceTypesUtils.pickDefaultType(serviceTypes)!;
     selectedType = common;
     selectedTypeId = (common['_id'] ?? '').toString();
-    selectedTypeKey =
-        (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
+    selectedTypeKey = (common['nameKey'] ?? common['_id'] ?? common['key'] ?? '').toString();
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // SMART price/minutes (igual que tu edit)
-  // ─────────────────────────────────────────────────────────────
   bool _hasLoadedTypes() => serviceTypes.isNotEmpty;
 
   double _finalPriceSmart(Map<String, dynamic>? svc, Map<String, dynamic>? type) {
-    final base = svc?['price'];
-    final baseD = base is num ? base.toDouble() : 0.0;
-
-    if (!_hasLoadedTypes()) return baseD;
-
-    final extra = type?['extraPrice'];
-    final extraD = extra is num ? extra.toDouble() : 0.0;
-    return baseD + extraD;
+    return ServiceTypesUtils.finalPriceSmart(
+      service: svc,
+      type: type,
+      loadedTypes: serviceTypes,
+    );
   }
 
   int _finalMinutesSmart(Map<String, dynamic>? svc, Map<String, dynamic>? type) {
-    if (_hasLoadedTypes()) {
-      final v = type?['durationMin'];
-      return v is num ? v.toInt() : 0;
-    }
-    final v = svc?['durationMin'];
-    return v is num ? v.toInt() : 0;
+    return ServiceTypesUtils.finalMinutesSmart(
+      service: svc,
+      type: type,
+      loadedTypes: serviceTypes,
+    );
   }
 
   Future<void> _ensureServiceLoaded() async {
@@ -443,8 +394,6 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
       ig.isNotEmpty ? "@$ig" : null,
     ].whereType<String>().join(' • ');
 
-    final isPending = PendingConfirmationUtils.isPending(widget.data);
-
     final width = MediaQuery.of(context).size.width;
     final maxDialogWidth = (width * 0.92).clamp(280.0, 440.0);
 
@@ -494,24 +443,6 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
                       Text(clientName, style: const TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 4),
                       Text(contact, style: TextStyle(color: Colors.grey[700])),
-                      if (isPending) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: PendingConfirmationUtils.pendingColor.withOpacity(0.22),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Pending confirmation (reservation)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
