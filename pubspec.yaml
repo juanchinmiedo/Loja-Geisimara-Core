@@ -47,7 +47,6 @@ flutter:
   assets:
     - assets/
     - assets/workers/
-    - assets/addons/
     - assets/services/
     - assets/flags/
     - assets/workers/portfolios/
