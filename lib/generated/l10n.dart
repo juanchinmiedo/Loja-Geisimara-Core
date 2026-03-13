@@ -190,6 +190,26 @@ class S {
     );
   }
 
+  /// `Desconhecido`
+  String get unknown {
+    return Intl.message(
+      'Desconhecido',
+      name: 'unknown',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Recomposição de Unhas`
+  String get nailRecomposition {
+    return Intl.message(
+      'Recomposição de Unhas',
+      name: 'nailRecomposition',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente`
   String get bottom_navigationbar {
     return Intl.message(

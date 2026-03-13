@@ -23,6 +23,8 @@ String trServiceOrAddon(BuildContext context, String? key) {
     "gelVarnishPedicure": s.gelVarnishPedicure,
     "simplePedicure": s.simplePedicure,
     "nailDecorations": s.nailDecorations,
+    "unknown": s.unknown,
+    "nailRecomposition": s.nailRecomposition,
     "hands": s.hands,
     "feet": s.feet,
     // 👉 aquí añades más claves cuando crees nuevos textos en los .arb

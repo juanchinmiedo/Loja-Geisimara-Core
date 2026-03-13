@@ -136,6 +136,8 @@ class MessageLookup extends MessageLookupByLibrary {
         "modeNew": MessageLookupByLibrary.simpleMessage("Novo"),
         "mostCommonBadge": MessageLookupByLibrary.simpleMessage("Mais comum"),
         "nailDecorations": MessageLookupByLibrary.simpleMessage("Decorações"),
+        "nailRecomposition":
+            MessageLookupByLibrary.simpleMessage("Recomposição de Unhas"),
         "nailRemove": MessageLookupByLibrary.simpleMessage("Remover Unhas"),
         "no": MessageLookupByLibrary.simpleMessage("Não"),
         "noMatches": MessageLookupByLibrary.simpleMessage("Sem resultados"),
@@ -202,6 +204,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "typeLabel": MessageLookupByLibrary.simpleMessage("Tipo"),
         "typeRequired":
             MessageLookupByLibrary.simpleMessage("O tipo é obrigatório"),
+        "unknown": MessageLookupByLibrary.simpleMessage("Desconhecido"),
         "viewAll": MessageLookupByLibrary.simpleMessage("Ver todo"),
         "viewProfileAndCatalog":
             MessageLookupByLibrary.simpleMessage("Ver perfil e catálogo"),

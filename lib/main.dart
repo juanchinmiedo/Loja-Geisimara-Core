@@ -9,7 +9,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/provider/locale_provider.dart';
-import 'package:salon_app/provider/admin_mode_provider.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/provider/booking_view_provider.dart';
 
@@ -45,9 +44,6 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<LocaleProvider>(
           create: (_) => LocaleProvider(),
-        ),
-        ChangeNotifierProvider<AdminModeProvider>(
-          create: (_) => AdminModeProvider(),
         ),
         ChangeNotifierProvider<AdminNavProvider>(
           create: (_) => AdminNavProvider(),

@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:salon_app/screens/introduction/onboarding_screen.dart';
+import 'package:provider/provider.dart';
 import 'package:salon_app/components/bottom_navigationbar.dart';
+import 'package:salon_app/provider/admin_nav_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -40,7 +42,8 @@ class _SplashScreenState extends State<SplashScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (currentUser != null) {
-      // Ya hay sesión iniciada → vamos directamente al home
+      context.read<AdminNavProvider>().setTab(0);
+      // Ya hay sesión iniciada → vamos directamente al home admin
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

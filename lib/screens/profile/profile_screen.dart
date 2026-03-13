@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
-import 'package:salon_app/provider/admin_mode_provider.dart';
-import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/controller/auth_controller.dart';
-import 'package:salon_app/utils/role_helper.dart';
+import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/provider/user_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -24,7 +23,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _isLoading = true);
 
       final user = await Authentication.signInWithGoogle(context: context);
-
       if (user == null) {
         setState(() => _isLoading = false);
         return;
@@ -32,6 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (mounted) {
         context.read<UserProvider>().setUser(user);
+        context.read<AdminNavProvider>().setTab(0);
       }
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
@@ -60,7 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
 
       context.read<UserProvider>().setUser(null);
-      context.read<AdminModeProvider>().reset();
+      context.read<AdminNavProvider>().setTab(0);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,10 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildLoggedInView(BuildContext context, User user) {
-    final adminMode = context.watch<AdminModeProvider>().enabled;
-
-    final userDocStream =
-        FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots();
+    final userDocStream = FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots();
 
     return StreamBuilder<DocumentSnapshot>(
       stream: userDocStream,
@@ -160,62 +156,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   'Role: $roleText',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 12),
-
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Your appointments (coming soon)',
+                  'Admin profile',
                   style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              FutureBuilder<bool>(
-                future: RoleHelper.canUseAdminMode(),
-                builder: (context, snap) {
-                  final canAdmin = snap.data == true;
-                  if (!canAdmin) return const SizedBox.shrink();
-
-                  return Column(
-                    children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xff721c80),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                        ),
-                        onPressed: () {
-                          final provider = context.read<AdminModeProvider>();
-                          provider.setEnabled(!provider.enabled);
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                provider.enabled ? 'Modo admin activado' : 'Modo usuario activado',
-                              ),
-                            ),
-                          );
-                        },
-                        icon: Icon(
-                          adminMode ? Icons.person : Icons.admin_panel_settings,
-                          color: Colors.white,
-                        ),
-                        label: Text(
-                          adminMode ? 'Back to user mode' : 'Start admin mode',
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  );
-                },
-              ),
-
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
