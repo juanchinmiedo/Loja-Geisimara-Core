@@ -1,3 +1,16 @@
+// lib/provider/user_provider.dart
+//
+// Fuente única de verdad para autenticación y permisos.
+//
+// Reglas del sistema:
+//   • Custom Claims mandan — Firestore es solo perfil/espejo.
+//   • worker puro   → selectedWorkerId = su workerId (bloqueado)
+//   • admin puro    → selectedWorkerId = null (ALL)
+//   • admin+worker  → selectedWorkerId = su workerId (preseleccionado, puede cambiar)
+//
+// workerId se lee primero de claims, luego de Firestore como fallback.
+// refreshSessionWithRetry() resuelve el delay de propagación de claims.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -22,74 +35,147 @@ class UserProvider extends ChangeNotifier {
   String? _workerId;
   String? get workerId => _workerId;
 
-  /// Admin filter: null = ALL workers
+  /// null = ALL (solo cuando isAdmin y no hay worker propio seleccionado)
   String? _selectedWorkerId;
   String? get selectedWorkerId => _selectedWorkerId;
 
   bool _setupMissingForWorker = false;
   bool get setupMissingForWorker => _setupMissingForWorker;
 
-  bool get isAdmin => _roles.contains("admin");
-  bool get isWorker => _roles.contains("worker");
+  bool get isAdmin => _roles.contains('admin');
+  bool get isWorker => _roles.contains('worker');
   bool get isWorkerAdmin => isAdmin && isWorker;
 
-  /// Call once at app start
-  void bindAuthStream() {
-    _auth.authStateChanges().listen((u) async {
-      _user = u;
-      _roles = const [];
-      _workerId = null;
-      _selectedWorkerId = null;
-      _setupMissingForWorker = false;
-      notifyListeners();
+  /// True si tiene al menos un role válido → puede usar la app
+  bool get isAuthorized => isAdmin || isWorker;
 
-      if (u == null) return;
-      await refreshSession();
+  // ── Auth stream ────────────────────────────────────────────────────────────
+  //
+  // SOLO reacciona al sign-out.
+  // El login lo manejan OnBoardingScreen y SplashScreen de forma explícita
+  // con refreshSessionWithRetry(), garantizando que los claims estén listos
+  // antes de navegar.
+  //
+  void bindAuthStream() {
+    _auth.authStateChanges().listen((u) {
+      if (u != null) {
+        // Login detectado por el stream — solo guardamos referencia.
+        // No llamamos refreshSession aquí: el token puede no tener claims aún.
+        if (_user == null || _user!.uid != u.uid) {
+          _user = u;
+          notifyListeners();
+        }
+        return;
+      }
+      // Sign-out → reset completo
+      _resetState();
     });
   }
 
-  Future<void> refreshSession() async {
-    final u = _user;
-    if (u == null) return;
+  void _resetState() {
+    _user = null;
+    _roles = const [];
+    _workerId = null;
+    _selectedWorkerId = null;
+    _setupMissingForWorker = false;
+    notifyListeners();
+  }
 
-    // ✅ Force refresh so new claims apply
+  // ── Session refresh ────────────────────────────────────────────────────────
+
+  Future<void> refreshSession() async {
+    // Usa siempre el usuario activo de FirebaseAuth, no el guardado en memoria,
+    // para evitar referencias obsoletas tras un reload().
+    await _auth.currentUser?.reload();
+    final u = _auth.currentUser;
+
+    if (u == null) {
+      _resetState();
+      return;
+    }
+
+    _user = u;
+
+    // Force-refresh: garantiza que obtenemos los claims más recientes
     final token = await u.getIdTokenResult(true);
     final claims = token.claims ?? {};
 
-    final rawRoles = claims["roles"];
-    final roles = <String>[];
+    // ── Roles ──────────────────────────────────────────────────────────────
+    final rawRoles = claims['roles'];
+    final parsedRoles = <String>[];
     if (rawRoles is List) {
       for (final r in rawRoles) {
-        if (r is String) roles.add(r);
+        if (r is String) {
+          final n = r.toLowerCase().trim();
+          if (n.isNotEmpty && !parsedRoles.contains(n)) parsedRoles.add(n);
+        }
       }
     }
-    _roles = roles;
+    _roles = parsedRoles;
 
-    // Load Firestore users/{uid}
-    final snap = await _db.collection("users").doc(u.uid).get();
-    final data = snap.data() ?? {};
-    _workerId = data["workerId"]?.toString();
+    // ── workerId: claims primero, Firestore como fallback ─────────────────
+    final claimWorkerId =
+        (claims['workerId'] as String?)?.trim();
+    String? resolvedWorkerId =
+        (claimWorkerId != null && claimWorkerId.isNotEmpty)
+            ? claimWorkerId
+            : null;
 
-    _setupMissingForWorker =
-        (isWorker && !isAdmin && (_workerId == null || _workerId!.isEmpty));
+    if (resolvedWorkerId == null) {
+      // Fallback: leer de Firestore users/{uid}
+      final snap = await _db.collection('users').doc(u.uid).get();
+      final data = snap.data() ?? {};
+      final fsWorkerId = (data['workerId'] as String?)?.trim();
+      resolvedWorkerId =
+          (fsWorkerId != null && fsWorkerId.isNotEmpty) ? fsWorkerId : null;
+    }
 
-    if (isAdmin) {
-      // Admin: if also worker -> default to own workerId, else ALL
-      _selectedWorkerId = (isWorker && _workerId != null && _workerId!.isNotEmpty)
-          ? _workerId
-          : null;
+    _workerId = resolvedWorkerId;
+
+    // ── selectedWorkerId según rol ─────────────────────────────────────────
+    if (!isAuthorized) {
+      _selectedWorkerId = null;
+      _setupMissingForWorker = false;
+    } else if (isAdmin) {
+      // admin puro → ALL; admin+worker → su propio worker preseleccionado
+      _selectedWorkerId =
+          (isWorker && _workerId != null) ? _workerId : null;
+      _setupMissingForWorker = false;
     } else {
-      // Worker: force to own
+      // worker puro → siempre bloqueado a su workerId
       _selectedWorkerId = _workerId;
+      _setupMissingForWorker = (_workerId == null);
     }
 
     if (kDebugMode) {
       // ignore: avoid_print
-      print("[UserProvider] uid=${u.uid} roles=$_roles workerId=$_workerId selected=$_selectedWorkerId");
+      print('[UserProvider] uid=${u.uid} '
+          'roles=$_roles workerId=$_workerId '
+          'selected=$_selectedWorkerId authorized=$isAuthorized');
     }
 
     notifyListeners();
   }
+
+  // ── Retry para claims con propagación tardía ───────────────────────────────
+  //
+  // Firebase propaga custom claims con un pequeño delay (~1-3s).
+  // Si el primer refreshSession() devuelve roles vacíos, reintentamos
+  // hasta [attempts] veces antes de dar acceso denegado.
+  //
+  Future<void> refreshSessionWithRetry({
+    int attempts = 5,
+    Duration delay = const Duration(milliseconds: 1500),
+  }) async {
+    for (int i = 0; i < attempts; i++) {
+      await refreshSession();
+      if (isAuthorized) return;
+      if (i < attempts - 1) await Future.delayed(delay);
+    }
+    // Si llegamos aquí con isAuthorized=false → acceso denegado legítimo
+  }
+
+  // ── Filtro de worker (solo admin puede cambiar) ────────────────────────────
 
   void setWorkerFilter(String? workerId) {
     if (!isAdmin) return;
@@ -97,31 +183,38 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Helpers para queries y creación ───────────────────────────────────────
+
+  /// workerId para filtrar queries de Firestore.
+  /// Admin con ALL → null (sin filtro, ve todo).
+  /// Worker puro   → su workerId siempre.
   String? workerIdForQueries() {
-    if (_user == null) return null;
+    if (_user == null || !isAuthorized) return null;
     if (isAdmin) return _selectedWorkerId; // null = ALL
     return _workerId;
   }
 
+  /// workerId para crear un nuevo appointment.
   String workerIdForCreate() {
-    if (_user == null) throw Exception("Not logged in");
-
+    if (_user == null || !isAuthorized) throw Exception('Not authorized');
     if (!isAdmin) {
-      if (_workerId == null || _workerId!.isEmpty) {
-        throw Exception("Worker missing workerId in Firestore users/{uid}");
-      }
+      if (_workerId == null) throw Exception('Worker missing workerId');
       return _workerId!;
     }
-
     if (_selectedWorkerId == null || _selectedWorkerId!.isEmpty) {
-      throw Exception("Select a worker first (cannot create in All workers view)");
+      throw Exception('Select a worker first');
     }
     return _selectedWorkerId!;
   }
 
-  // Compatibility with old code
+  // ── Compat ─────────────────────────────────────────────────────────────────
+
   void setUser(User? newUser) {
     _user = newUser;
+    if (newUser == null) {
+      _resetState();
+      return;
+    }
     notifyListeners();
   }
 

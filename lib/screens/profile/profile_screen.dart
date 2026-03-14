@@ -1,4 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/screens/profile/profile_screen.dart
+//
+// Cambio: ya no lee 'role' de Firestore.
+// Muestra roles reales desde UserProvider (Custom Claims).
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -7,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:salon_app/controller/auth_controller.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/provider/user_provider.dart';
+import 'package:salon_app/screens/introduction/onboarding_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -22,26 +27,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       setState(() => _isLoading = true);
 
-      final user = await Authentication.signInWithGoogle(context: context);
-      if (user == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
+      final user =
+          await Authentication.signInWithGoogle(context: context);
+      if (user == null) return;
 
-      if (mounted) {
-        context.read<UserProvider>().setUser(user);
-        context.read<AdminNavProvider>().setTab(0);
-      }
+      if (!mounted) return;
+      final userProvider = context.read<UserProvider>();
+      userProvider.setUser(user);
+      await userProvider.refreshSessionWithRetry();
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {
-          'name': user.displayName ?? '',
-          'email': user.email ?? '',
-          'photoURL': user.photoURL ?? '',
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      if (!mounted) return;
+      context.read<AdminNavProvider>().setTab(0);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,10 +52,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await GoogleSignIn().signOut();
       await FirebaseAuth.instance.signOut();
-      if (!mounted) return;
 
+      if (!mounted) return;
       context.read<UserProvider>().setUser(null);
       context.read<AdminNavProvider>().setTab(0);
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const OnBoardingScreen()),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,30 +71,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserProvider>().user ?? FirebaseAuth.instance.currentUser;
+    final user =
+        context.watch<UserProvider>().user ??
+        FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Profile', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xff721c80),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.purple))
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.purple))
           : user == null
-              ? _buildLoggedOutView(context)
+              ? _buildLoggedOutView()
               : _buildLoggedInView(context, user),
     );
   }
 
-  Widget _buildLoggedOutView(BuildContext context) {
+  Widget _buildLoggedOutView() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.person_outline, size: 80, color: Color(0xff721c80)),
+            const Icon(Icons.person_outline,
+                size: 80, color: Color(0xff721c80)),
             const SizedBox(height: 16),
             Text(
               'Sign in to manage your appointments',
@@ -104,15 +110,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xff721c80),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
               ),
               onPressed: _handleGoogleSignIn,
               icon: const Icon(Icons.login, color: Colors.white),
-              label: const Text(
-                'Continue with Google',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
+              label: const Text('Continue with Google',
+                  style: TextStyle(color: Colors.white, fontSize: 16)),
             ),
           ],
         ),
@@ -121,69 +127,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildLoggedInView(BuildContext context, User user) {
-    final userDocStream = FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots();
+    // Lee roles y workerId desde UserProvider (Custom Claims) — no Firestore
+    final userProvider = context.watch<UserProvider>();
+    final rolesText = userProvider.roles.isEmpty
+        ? 'No roles assigned'
+        : userProvider.roles.join(', ');
+    final workerId = userProvider.workerId ?? '—';
+    final accessType = userProvider.isWorkerAdmin
+        ? 'Admin + Worker'
+        : userProvider.isAdmin
+            ? 'Admin'
+            : userProvider.isWorker
+                ? 'Worker'
+                : 'No access';
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: userDocStream,
-      builder: (context, snap) {
-        final role = (snap.data?.data() as Map<String, dynamic>?)?['role'] as String?;
-        final roleText = (role ?? '').toString();
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-                child: user.photoURL == null ? const Icon(Icons.person, size: 40) : null,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                user.displayName ?? 'User',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-              if (user.email != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  user.email!,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ],
-              const SizedBox(height: 6),
-              if (role != null)
-                Text(
-                  'Role: $roleText',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Admin profile',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                ),
-                onPressed: _handleSignOut,
-                icon: const Icon(Icons.logout, color: Colors.white),
-                label: const Text(
-                  'Sign out',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-            ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 40,
+            backgroundImage:
+                user.photoURL != null ? NetworkImage(user.photoURL!) : null,
+            child: user.photoURL == null
+                ? const Icon(Icons.person, size: 40)
+                : null,
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          Text(
+            user.displayName ?? 'User',
+            style: const TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+          if (user.email != null) ...[
+            const SizedBox(height: 4),
+            Text(user.email!,
+                style: const TextStyle(fontSize: 14, color: Colors.grey)),
+          ],
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+
+          // ── Info desde claims (no Firestore) ──────────────────────────
+          _infoRow(Icons.verified_user_outlined, 'Access', accessType,
+              const Color(0xff721c80)),
+          const SizedBox(height: 8),
+          _infoRow(Icons.badge_outlined, 'Roles', rolesText, Colors.grey),
+          const SizedBox(height: 8),
+          _infoRow(
+              Icons.work_outline, 'Worker ID', workerId, Colors.grey),
+
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+            ),
+            onPressed: _handleSignOut,
+            icon: const Icon(Icons.logout, color: Colors.white),
+            label: const Text('Sign out',
+                style: TextStyle(color: Colors.white, fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(
+      IconData icon, String label, String value, Color iconColor) {
+    return Row(
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 10),
+        Text('$label: ',
+            style: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 13)),
+        Expanded(
+          child: Text(value,
+              style: TextStyle(
+                  fontSize: 13, color: Colors.grey[700]),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ],
     );
   }
 }

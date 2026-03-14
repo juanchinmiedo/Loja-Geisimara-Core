@@ -1,11 +1,13 @@
+// lib/screens/introduction/spalsh_screen.dart
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:salon_app/screens/introduction/onboarding_screen.dart';
-import 'package:provider/provider.dart';
 import 'package:salon_app/components/bottom_navigationbar.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/provider/user_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -16,49 +18,49 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   bool isAnimate = true;
-  bool isClicked = false; // ahora mismo no se usa, pero lo mantengo por si luego lo necesitas
-
-  final width = 50;
 
   @override
   void initState() {
     super.initState();
-
-    // 1) Animación: después de 1 segundo, hacemos aparecer el logo
-    Future.delayed(const Duration(seconds: 1), (() {
+    Future.delayed(const Duration(seconds: 1), () {
       if (!mounted) return;
-      setState(() {
-        isAnimate = false;
-      });
-    }));
-
-    // 2) Después de 5 segundos en total, decidimos adónde ir
+      setState(() => isAnimate = false);
+    });
     Future.delayed(const Duration(seconds: 5), _goNext);
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     if (!mounted) return;
 
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    if (currentUser != null) {
-      context.read<AdminNavProvider>().setTab(0);
-      // Ya hay sesión iniciada → vamos directamente al home admin
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const BottomNavigationComponent(),
-        ),
-      );
-    } else {
-      // No hay sesión → mostramos el onboarding
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const OnBoardingScreen(),
-        ),
-      );
+    if (currentUser == null) {
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const OnBoardingScreen()));
+      return;
     }
+
+    final userProvider = context.read<UserProvider>();
+    userProvider.setUser(currentUser);
+
+    // Retry por si los claims tardan en propagarse al reiniciar la app
+    await userProvider.refreshSessionWithRetry();
+
+    if (!mounted) return;
+
+    if (!userProvider.isAuthorized) {
+      // Claims revocados mientras la app estaba cerrada
+      await FirebaseAuth.instance.signOut();
+      userProvider.setUser(null);
+      if (!mounted) return;
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const OnBoardingScreen()));
+      return;
+    }
+
+    context.read<AdminNavProvider>().setTab(0);
+    Navigator.pushReplacement(context,
+        MaterialPageRoute(builder: (_) => const BottomNavigationComponent()));
   }
 
   @override
@@ -66,8 +68,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 70, vertical: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 150),
         child: Center(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -83,15 +84,10 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: SizedBox(
                     width: 260,
                     height: 260,
-                    child: Image.asset(
-                      'assets/logo.png',
-                      fit: BoxFit.contain,
-                    ),
+                    child: Image.asset('assets/logo.png', fit: BoxFit.contain),
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              // Si algún día quieres poner un subtítulo o loader, lo puedes añadir aquí
             ],
           ),
         ),

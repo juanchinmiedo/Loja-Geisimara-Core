@@ -17,26 +17,33 @@ async function mustExist(uid) {
   }
 }
 
-async function setClaims(uid, roles) {
-  await admin.auth().setCustomUserClaims(uid, { roles });
-  console.log(`✅ Claims set for ${uid}: ${JSON.stringify(roles)}`);
+async function setClaims(uid, roles, workerId = null) {
+  const claims = { roles };
+  if (workerId) claims.workerId = workerId;
+  await admin.auth().setCustomUserClaims(uid, claims);
+  console.log(`✅ Claims set for ${uid}: ${JSON.stringify(claims)}`);
 }
 
 async function run() {
   console.log("Project:", serviceAccount.project_id);
   console.log("Setting claims...");
 
-  // 🔥 Pega aquí los UID CORRECTOS (copiados de Authentication)
   const UID_GEISIMARA = uids.UID_GEISIMARA;
-  const UID_JUAN = uids.UID_JUAN;
+  const UID_JUAN      = uids.UID_JUAN;
+  const UID_ANA       = uids.UID_ANA;
 
-  // 1) Verifica que existen
   await mustExist(UID_GEISIMARA);
   await mustExist(UID_JUAN);
+  await mustExist(UID_ANA);
 
-  // 2) Set claims
-  await setClaims(UID_GEISIMARA, ["admin", "worker"]);
+  // admin + worker  → preselecciona su propia pill, puede ver todo
+  await setClaims(UID_GEISIMARA, ["admin", "worker"], "Geisimara_Santos_Souza");
+
+  // admin puro      → empieza en ALL, puede ver todo
   await setClaims(UID_JUAN, ["admin"]);
+
+  // worker puro     → bloqueada a su propio worker, no ve nada de otros
+  await setClaims(UID_ANA, ["worker"], "Flavia_Flores");
 
   console.log("🎉 Done");
   process.exit(0);
