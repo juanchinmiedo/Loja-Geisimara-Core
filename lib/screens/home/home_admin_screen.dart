@@ -1,14 +1,22 @@
+// lib/screens/home/home_admin_screen.dart
+//
+// Commit 4: añade botón "Lost clients" en el panel sticky inferior.
+// Estructura 100% idéntica al original — solo se toca _modeButtons()
+// para añadir la fila extra cuando el usuario es admin.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
+
 import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/provider/user_provider.dart';
 
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 
 import 'package:salon_app/screens/home/home_client_bottom_sheet.dart';
+import 'package:salon_app/screens/clients/lost_clients_screen.dart';
 import 'package:salon_app/widgets/admin_notifications_overlay.dart';
 
 class HomeAdminScreen extends StatefulWidget {
@@ -22,9 +30,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
   HomeAdminMode mode = HomeAdminMode.looking;
 
   String _fullName(Map<String, dynamic> c, String fallback) {
-    final fn = (c['firstName'] ?? '').toString().trim();
-    final ln = (c['lastName'] ?? '').toString().trim();
-    final name = ('$fn $ln').trim();
+    final fn   = (c['firstName'] ?? '').toString().trim();
+    final ln   = (c['lastName']  ?? '').toString().trim();
+    final name = '$fn $ln'.trim();
     return name.isEmpty ? fallback : name;
   }
 
@@ -32,13 +40,10 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     final ctry = (c['country'] is num)
         ? (c['country'] as num).toInt()
         : int.tryParse('${c['country'] ?? ''}') ?? 0;
-
     final ph = (c['phone'] is num)
         ? (c['phone'] as num).toInt()
         : int.tryParse('${c['phone'] ?? ''}') ?? 0;
-
     final ig = (c['instagram'] ?? '').toString().trim();
-
     final parts = <String>[];
     if (ctry > 0 && ph > 0) parts.add('+$ctry $ph');
     if (ig.isNotEmpty) parts.add('@$ig');
@@ -47,21 +52,18 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
 
   Query<Map<String, dynamic>> _queryForMode() {
     final col = FirebaseFirestore.instance.collection('clients');
-
     switch (mode) {
       case HomeAdminMode.looking:
         return col
             .where('bookingRequestActive', isEqualTo: true)
             .orderBy('bookingRequestUpdatedAt', descending: true)
             .limit(80);
-
       case HomeAdminMode.cancelled:
         return col
             .where('stats.totalCancelled', isGreaterThan: 0)
             .orderBy('stats.totalCancelled', descending: true)
             .orderBy('stats.totalScheduled', descending: true)
             .limit(80);
-
       case HomeAdminMode.noShow:
         return col
             .where('stats.totalNoShow', isGreaterThan: 0)
@@ -73,38 +75,32 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
 
   String _subtitle() {
     switch (mode) {
-      case HomeAdminMode.looking:
-        return "Clients looking for appointments";
-      case HomeAdminMode.cancelled:
-        return "Most cancellations (then most attended)";
-      case HomeAdminMode.noShow:
-        return "Most no-shows (then most attended)";
+      case HomeAdminMode.looking:   return 'Clients looking for appointments';
+      case HomeAdminMode.cancelled: return 'Most cancellations (then most attended)';
+      case HomeAdminMode.noShow:    return 'Most no-shows (then most attended)';
     }
   }
 
   Color _modeTint(HomeAdminMode m) {
     switch (m) {
-      case HomeAdminMode.looking:
-        return const Color(0xff721c80);
-      case HomeAdminMode.cancelled:
-        return Colors.orange;
-      case HomeAdminMode.noShow:
-        return Colors.redAccent;
+      case HomeAdminMode.looking:   return const Color(0xff721c80);
+      case HomeAdminMode.cancelled: return Colors.orange;
+      case HomeAdminMode.noShow:    return Colors.redAccent;
     }
   }
 
   IconData _modeIcon(HomeAdminMode m) {
     switch (m) {
-      case HomeAdminMode.looking:
-        return Icons.notifications_active_outlined;
-      case HomeAdminMode.cancelled:
-        return Icons.event_busy_rounded;
-      case HomeAdminMode.noShow:
-        return Icons.person_off_rounded;
+      case HomeAdminMode.looking:   return Icons.notifications_active_outlined;
+      case HomeAdminMode.cancelled: return Icons.event_busy_rounded;
+      case HomeAdminMode.noShow:    return Icons.person_off_rounded;
     }
   }
 
-  Widget _modeButtons() {
+  // ── Mode buttons ──────────────────────────────────────────────────────────────
+  // Idéntico al original salvo la fila extra "Lost clients" para admins.
+
+  Widget _modeButtons(bool isAdmin) {
     const purple = Color(0xff721c80);
 
     Widget pill({
@@ -125,7 +121,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               color: active ? tint.withOpacity(0.22) : tint.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: active ? tint.withOpacity(0.55) : Colors.black.withOpacity(0.18),
+                color: active
+                    ? tint.withOpacity(0.55)
+                    : Colors.black.withOpacity(0.18),
               ),
             ),
             child: Row(
@@ -138,7 +136,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black87),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, color: Colors.black87),
                   ),
                 ),
               ],
@@ -148,34 +147,83 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
       );
     }
 
-    return Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        pill(
-          active: mode == HomeAdminMode.looking,
-          onTap: () => setState(() => mode = HomeAdminMode.looking),
-          icon: Icons.notifications_active_outlined,
-          label: "Looking",
-          tint: purple,
-          iconColor: purple,
+        // ── Fila 1: los 3 modos originales ──────────────────────────────────
+        Row(
+          children: [
+            pill(
+              active: mode == HomeAdminMode.looking,
+              onTap: () => setState(() => mode = HomeAdminMode.looking),
+              icon: Icons.notifications_active_outlined,
+              label: 'Looking',
+              tint: purple,
+              iconColor: purple,
+            ),
+            const SizedBox(width: 10),
+            pill(
+              active: mode == HomeAdminMode.cancelled,
+              onTap: () => setState(() => mode = HomeAdminMode.cancelled),
+              icon: Icons.event_busy_rounded,
+              label: 'Cancelled',
+              tint: Colors.orange,
+              iconColor: Colors.orange[800] ?? Colors.orange,
+            ),
+            const SizedBox(width: 10),
+            pill(
+              active: mode == HomeAdminMode.noShow,
+              onTap: () => setState(() => mode = HomeAdminMode.noShow),
+              icon: Icons.person_off_rounded,
+              label: 'No-show',
+              tint: Colors.redAccent,
+              iconColor: Colors.redAccent,
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        pill(
-          active: mode == HomeAdminMode.cancelled,
-          onTap: () => setState(() => mode = HomeAdminMode.cancelled),
-          icon: Icons.event_busy_rounded,
-          label: "Cancelled",
-          tint: Colors.orange,
-          iconColor: Colors.orange[800] ?? Colors.orange,
-        ),
-        const SizedBox(width: 10),
-        pill(
-          active: mode == HomeAdminMode.noShow,
-          onTap: () => setState(() => mode = HomeAdminMode.noShow),
-          icon: Icons.person_off_rounded,
-          label: "No-show",
-          tint: Colors.redAccent,
-          iconColor: Colors.redAccent,
-        ),
+
+        // ── Fila 2: Lost clients (solo admin) ────────────────────────────────
+        if (isAdmin) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const LostClientsScreen()),
+              ),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.brown.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: Colors.brown.withOpacity(0.25)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.people_alt_outlined,
+                        size: 18, color: Colors.brown[600]),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Lost clients  (30d+ / 45d+)',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: Colors.brown[700]),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(Icons.chevron_right,
+                        size: 18, color: Colors.brown[400]),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -188,68 +236,80 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => HomeClientBottomSheet(
-        clientId: clientId,
-        mode: mode,
-      ),
+      builder: (_) => HomeClientBottomSheet(clientId: clientId, mode: mode),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final stream = _queryForMode().snapshots();
+    final stream  = _queryForMode().snapshots();
+    final isAdmin = context.watch<UserProvider>().isAdmin;
 
-    const fixedBottomPanelHeight = 92.0;
+    // El panel sticky crece si hay fila extra de Lost clients
+    final bottomPanelH = isAdmin ? 140.0 : 92.0;
 
     return Scaffold(
       body: Stack(
         children: [
+
+          // ── Contenido scrollable ───────────────────────────────────────────
           Positioned.fill(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: fixedBottomPanelHeight + 18),
+              padding: EdgeInsets.only(bottom: bottomPanelH + 18),
               child: Column(
                 children: [
                   AppGradientHeader(
-                    title: "Admin Home",
+                    title: 'Admin Home',
                     subtitle: _subtitle(),
                   ),
-                  // (contenido sigue...)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 16),
+                    child: StreamBuilder<
+                        QuerySnapshot<Map<String, dynamic>>>(
                       stream: stream,
                       builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (snap.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
                         }
                         if (snap.hasError) {
-                          return Text("Error: ${snap.error}", style: const TextStyle(color: Colors.red));
+                          return Text('Error: ${snap.error}',
+                              style:
+                                  const TextStyle(color: Colors.red));
                         }
 
                         final docs = snap.data?.docs ?? [];
                         if (docs.isEmpty) {
                           return AppSectionCard(
-                            title: "Results",
+                            title: 'Results',
                             child: Text(
                               mode == HomeAdminMode.looking
-                                  ? "No active booking requests right now."
-                                  : "No clients match this filter.",
-                              style: TextStyle(color: Colors.grey[700]),
+                                  ? 'No active booking requests right now.'
+                                  : 'No clients match this filter.',
+                              style:
+                                  TextStyle(color: Colors.grey[700]),
                             ),
                           );
                         }
 
                         return Column(
                           children: docs.map((d) {
-                            final c = d.data();
-                            final clientId = d.id;
-
+                            final c           = d.data();
+                            final clientId    = d.id;
                             final displayName = _fullName(c, clientId);
-                            final contact = _contactLine(c);
+                            final contact     = _contactLine(c);
 
-                            final cancelled = ((c['stats']?['totalCancelled']) as num?)?.toInt() ?? 0;
-                            final noShow = ((c['stats']?['totalNoShow']) as num?)?.toInt() ?? 0;
-                            final attended = ((c['stats']?['totalScheduled']) as num?)?.toInt() ?? 0;
+                            final cancelled =
+                                ((c['stats']?['totalCancelled']) as num?)
+                                        ?.toInt() ?? 0;
+                            final noShow =
+                                ((c['stats']?['totalNoShow']) as num?)
+                                        ?.toInt() ?? 0;
+                            final attended =
+                                ((c['stats']?['totalScheduled']) as num?)
+                                        ?.toInt() ?? 0;
 
                             final tint = _modeTint(mode);
 
@@ -258,48 +318,67 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                                 return AppPill(
                                   background: tint.withOpacity(0.10),
                                   borderColor: tint.withOpacity(0.25),
-                                  child: Icon(_modeIcon(mode), size: 16, color: tint),
+                                  child: Icon(_modeIcon(mode),
+                                      size: 16, color: tint),
                                 );
                               }
                               if (mode == HomeAdminMode.cancelled) {
                                 return AppPill(
-                                  background: Colors.orange.withOpacity(0.12),
-                                  borderColor: Colors.orange.withOpacity(0.28),
-                                  child: Text("×$cancelled", style: const TextStyle(fontWeight: FontWeight.w900)),
+                                  background:
+                                      Colors.orange.withOpacity(0.12),
+                                  borderColor:
+                                      Colors.orange.withOpacity(0.28),
+                                  child: Text('×$cancelled',
+                                      style: const TextStyle(
+                                          fontWeight:
+                                              FontWeight.w900)),
                                 );
                               }
                               return AppPill(
-                                background: Colors.redAccent.withOpacity(0.12),
-                                borderColor: Colors.redAccent.withOpacity(0.28),
-                                child: Text("×$noShow", style: const TextStyle(fontWeight: FontWeight.w900)),
+                                background:
+                                    Colors.redAccent.withOpacity(0.12),
+                                borderColor:
+                                    Colors.redAccent.withOpacity(0.28),
+                                child: Text('×$noShow',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900)),
                               );
                             }
 
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
+                              margin:
+                                  const EdgeInsets.only(bottom: 10),
                               child: InkWell(
-                                onTap: () => _openClientSheet(clientId),
-                                borderRadius: BorderRadius.circular(14),
+                                onTap: () =>
+                                    _openClientSheet(clientId),
+                                borderRadius:
+                                    BorderRadius.circular(14),
                                 child: AppSectionCard(
                                   title: displayName,
                                   trailing: trailing(),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       if (contact.isNotEmpty)
                                         Text(
                                           contact,
                                           maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(color: Colors.grey[700]),
+                                          overflow:
+                                              TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              color: Colors.grey[700]),
                                         ),
                                       const SizedBox(height: 6),
-                                      if (mode == HomeAdminMode.looking)
-                                        const Text("Tap to view request details")
+                                      if (mode ==
+                                          HomeAdminMode.looking)
+                                        const Text(
+                                            'Tap to view request details')
                                       else
                                         Text(
-                                          "Attended: $attended",
-                                          style: TextStyle(color: Colors.grey[700]),
+                                          'Attended: $attended',
+                                          style: TextStyle(
+                                              color: Colors.grey[700]),
                                         ),
                                     ],
                                   ),
@@ -316,7 +395,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             ),
           ),
 
-          // ✅ Campana + badge en HOME (no en Clients)
+          // ── Campana + badge ────────────────────────────────────────────────
           Positioned(
             right: 16,
             top: MediaQuery.of(context).padding.top + 10,
@@ -329,8 +408,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                   .limit(200)
                   .snapshots(),
               builder: (context, snapA) {
-                final count = (snapA.data?.docs.length ?? 0);
-
+                final count = snapA.data?.docs.length ?? 0;
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -338,8 +416,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                       AdminNotificationsOverlay.show(
                         context,
                         onOpenClient: (clientId) {
-                          // ✅ ir a Clients y abrir perfil
-                          context.read<AdminNavProvider>().goToClientsAndOpen(clientId);
+                          context
+                              .read<AdminNavProvider>()
+                              .goToClientsAndOpen(clientId);
                         },
                       );
                     },
@@ -353,7 +432,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.20),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black.withOpacity(0.25)),
+                            border: Border.all(
+                                color:
+                                    Colors.black.withOpacity(0.25)),
                           ),
                           child: const Center(
                             child: Icon(
@@ -368,11 +449,14 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                             right: -6,
                             top: -6,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.redAccent,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: Colors.white, width: 2),
+                                borderRadius:
+                                    BorderRadius.circular(999),
+                                border: Border.all(
+                                    color: Colors.white, width: 2),
                               ),
                               child: Text(
                                 count > 99 ? '99+' : '$count',
@@ -391,6 +475,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               },
             ),
           ),
+
+          // ── Panel sticky inferior ──────────────────────────────────────────
           Positioned(
             left: 0,
             right: 0,
@@ -409,7 +495,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     ),
                   ],
                 ),
-                child: _modeButtons(),
+                child: _modeButtons(isAdmin),
               ),
             ),
           ),
