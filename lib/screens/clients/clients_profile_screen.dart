@@ -765,8 +765,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
       'scheduled':      kPurple,
       'done':           Colors.green,
       'attended':       Colors.green,
-      'cancelled':      Colors.red,
-      'noShow':         Colors.orange,
+      'cancelled':      Colors.orange,
+      'noShow':         Colors.red,
     }[displayStatus] ?? Colors.grey;
 
     return Container(

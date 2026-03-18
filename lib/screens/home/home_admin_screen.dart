@@ -1,8 +1,4 @@
 // lib/screens/home/home_admin_screen.dart
-//
-// Commit 4: añade botón "Lost clients" en el panel sticky inferior.
-// Estructura 100% idéntica al original — solo se toca _modeButtons()
-// para añadir la fila extra cuando el usuario es admin.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -15,9 +11,12 @@ import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 
-import 'package:salon_app/screens/home/home_client_bottom_sheet.dart';
-import 'package:salon_app/screens/clients/lost_clients_screen.dart';
+import 'package:salon_app/screens/home/lost_clients_screen.dart';
+
+import 'package:salon_app/screens/clients/clients_profile_screen.dart';
 import 'package:salon_app/widgets/admin_notifications_overlay.dart';
+
+enum HomeAdminMode { looking, cancelled, noShow }
 
 class HomeAdminScreen extends StatefulWidget {
   const HomeAdminScreen({super.key});
@@ -97,9 +96,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     }
   }
 
-  // ── Mode buttons ──────────────────────────────────────────────────────────────
-  // Idéntico al original salvo la fila extra "Lost clients" para admins.
-
   Widget _modeButtons(bool isAdmin) {
     const purple = Color(0xff721c80);
 
@@ -150,7 +146,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Fila 1: los 3 modos originales ──────────────────────────────────
         Row(
           children: [
             pill(
@@ -181,8 +176,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             ),
           ],
         ),
-
-        // ── Fila 2: Lost clients (solo admin) ────────────────────────────────
         if (isAdmin) ...[
           const SizedBox(height: 8),
           SizedBox(
@@ -190,34 +183,27 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             child: InkWell(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const LostClientsScreen()),
+                MaterialPageRoute(builder: (_) => const LostClientsScreen()),
               ),
               borderRadius: BorderRadius.circular(14),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.brown.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: Colors.brown.withOpacity(0.25)),
+                  border: Border.all(color: Colors.brown.withOpacity(0.25)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.people_alt_outlined,
-                        size: 18, color: Colors.brown[600]),
+                    Icon(Icons.people_alt_outlined, size: 18, color: Colors.brown[600]),
                     const SizedBox(width: 8),
                     Text(
                       'Lost clients  (30d+ / 45d+)',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          color: Colors.brown[700]),
+                      style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown[700]),
                     ),
                     const SizedBox(width: 6),
-                    Icon(Icons.chevron_right,
-                        size: 18, color: Colors.brown[400]),
+                    Icon(Icons.chevron_right, size: 18, color: Colors.brown[400]),
                   ],
                 ),
               ),
@@ -228,15 +214,11 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     );
   }
 
-  Future<void> _openClientSheet(String clientId) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) => HomeClientBottomSheet(clientId: clientId, mode: mode),
+  void _openClientProfile(String clientId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => ClientProfileScreen(clientId: clientId)),
     );
   }
 
@@ -244,15 +226,12 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
   Widget build(BuildContext context) {
     final stream  = _queryForMode().snapshots();
     final isAdmin = context.watch<UserProvider>().isAdmin;
-
-    // El panel sticky crece si hay fila extra de Lost clients
     final bottomPanelH = isAdmin ? 140.0 : 92.0;
 
     return Scaffold(
       body: Stack(
         children: [
 
-          // ── Contenido scrollable ───────────────────────────────────────────
           Positioned.fill(
             child: SingleChildScrollView(
               padding: EdgeInsets.only(bottom: bottomPanelH + 18),
@@ -263,21 +242,16 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     subtitle: _subtitle(),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 16),
-                    child: StreamBuilder<
-                        QuerySnapshot<Map<String, dynamic>>>(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: stream,
                       builder: (context, snap) {
-                        if (snap.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
                         }
                         if (snap.hasError) {
                           return Text('Error: ${snap.error}',
-                              style:
-                                  const TextStyle(color: Colors.red));
+                              style: const TextStyle(color: Colors.red));
                         }
 
                         final docs = snap.data?.docs ?? [];
@@ -288,8 +262,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                               mode == HomeAdminMode.looking
                                   ? 'No active booking requests right now.'
                                   : 'No clients match this filter.',
-                              style:
-                                  TextStyle(color: Colors.grey[700]),
+                              style: TextStyle(color: Colors.grey[700]),
                             ),
                           );
                         }
@@ -301,15 +274,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                             final displayName = _fullName(c, clientId);
                             final contact     = _contactLine(c);
 
-                            final cancelled =
-                                ((c['stats']?['totalCancelled']) as num?)
-                                        ?.toInt() ?? 0;
-                            final noShow =
-                                ((c['stats']?['totalNoShow']) as num?)
-                                        ?.toInt() ?? 0;
-                            final attended =
-                                ((c['stats']?['totalScheduled']) as num?)
-                                        ?.toInt() ?? 0;
+                            final cancelled = ((c['stats']?['totalCancelled']) as num?)?.toInt() ?? 0;
+                            final noShow    = ((c['stats']?['totalNoShow'])    as num?)?.toInt() ?? 0;
+                            final attended  = ((c['stats']?['totalScheduled']) as num?)?.toInt() ?? 0;
 
                             final tint = _modeTint(mode);
 
@@ -318,68 +285,47 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                                 return AppPill(
                                   background: tint.withOpacity(0.10),
                                   borderColor: tint.withOpacity(0.25),
-                                  child: Icon(_modeIcon(mode),
-                                      size: 16, color: tint),
+                                  child: Icon(_modeIcon(mode), size: 16, color: tint),
                                 );
                               }
                               if (mode == HomeAdminMode.cancelled) {
                                 return AppPill(
-                                  background:
-                                      Colors.orange.withOpacity(0.12),
-                                  borderColor:
-                                      Colors.orange.withOpacity(0.28),
+                                  background: Colors.orange.withOpacity(0.12),
+                                  borderColor: Colors.orange.withOpacity(0.28),
                                   child: Text('×$cancelled',
-                                      style: const TextStyle(
-                                          fontWeight:
-                                              FontWeight.w900)),
+                                      style: const TextStyle(fontWeight: FontWeight.w900)),
                                 );
                               }
                               return AppPill(
-                                background:
-                                    Colors.redAccent.withOpacity(0.12),
-                                borderColor:
-                                    Colors.redAccent.withOpacity(0.28),
+                                background: Colors.redAccent.withOpacity(0.12),
+                                borderColor: Colors.redAccent.withOpacity(0.28),
                                 child: Text('×$noShow',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w900)),
+                                    style: const TextStyle(fontWeight: FontWeight.w900)),
                               );
                             }
 
                             return Container(
-                              margin:
-                                  const EdgeInsets.only(bottom: 10),
+                              margin: const EdgeInsets.only(bottom: 10),
                               child: InkWell(
-                                onTap: () =>
-                                    _openClientSheet(clientId),
-                                borderRadius:
-                                    BorderRadius.circular(14),
+                                onTap: () => _openClientProfile(clientId),
+                                borderRadius: BorderRadius.circular(14),
                                 child: AppSectionCard(
                                   title: displayName,
                                   trailing: trailing(),
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       if (contact.isNotEmpty)
-                                        Text(
-                                          contact,
-                                          maxLines: 1,
-                                          overflow:
-                                              TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              color: Colors.grey[700]),
-                                        ),
+                                        Text(contact,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: Colors.grey[700])),
                                       const SizedBox(height: 6),
-                                      if (mode ==
-                                          HomeAdminMode.looking)
-                                        const Text(
-                                            'Tap to view request details')
+                                      if (mode == HomeAdminMode.looking)
+                                        const Text('Tap to view profile')
                                       else
-                                        Text(
-                                          'Attended: $attended',
-                                          style: TextStyle(
-                                              color: Colors.grey[700]),
-                                        ),
+                                        Text('Attended: $attended',
+                                            style: TextStyle(color: Colors.grey[700])),
                                     ],
                                   ),
                                 ),
@@ -395,7 +341,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             ),
           ),
 
-          // ── Campana + badge ────────────────────────────────────────────────
+          // Campana + badge
           Positioned(
             right: 16,
             top: MediaQuery.of(context).padding.top + 10,
@@ -416,9 +362,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                       AdminNotificationsOverlay.show(
                         context,
                         onOpenClient: (clientId) {
-                          context
-                              .read<AdminNavProvider>()
-                              .goToClientsAndOpen(clientId);
+                          context.read<AdminNavProvider>().goToClientsAndOpen(clientId);
                         },
                       );
                     },
@@ -432,16 +376,11 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.20),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color:
-                                    Colors.black.withOpacity(0.25)),
+                            border: Border.all(color: Colors.black.withOpacity(0.25)),
                           ),
                           child: const Center(
-                            child: Icon(
-                              Icons.notifications_active_outlined,
-                              color: Color(0xff721c80),
-                              size: 22,
-                            ),
+                            child: Icon(Icons.notifications_active_outlined,
+                                color: Color(0xff721c80), size: 22),
                           ),
                         ),
                         if (count > 0)
@@ -449,22 +388,18 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                             right: -6,
                             top: -6,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.redAccent,
-                                borderRadius:
-                                    BorderRadius.circular(999),
-                                border: Border.all(
-                                    color: Colors.white, width: 2),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: Colors.white, width: 2),
                               ),
                               child: Text(
                                 count > 99 ? '99+' : '$count',
                                 style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 11,
-                                ),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11),
                               ),
                             ),
                           ),
@@ -476,7 +411,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             ),
           ),
 
-          // ── Panel sticky inferior ──────────────────────────────────────────
+          // Panel sticky inferior
           Positioned(
             left: 0,
             right: 0,
