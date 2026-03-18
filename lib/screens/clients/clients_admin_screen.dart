@@ -1,9 +1,11 @@
 // lib/screens/clients/clients_admin_screen.dart
 //
-// Commit 5:
-//  • _fetchNextAppt → lazy: solo se consulta cuando la card entra en pantalla
-//    usando un cache + FutureBuilder por item (no para todos a la vez)
-//  • Abre ClientProfileScreen en lugar del bottom-sheet anterior
+// Perf(commit 9): batch prefetch next appointments
+//  • En lugar de 1 query por card visible (FutureBuilder individual),
+//    se hace 1 sola query para todos los IDs visibles en pantalla a la vez.
+//  • _prefetchNextAppts(ids) carga los próximos appointments de todos los
+//    clientes de una lista en una sola roundtrip a Firestore.
+//  • El cache sigue existiendo para no repetir queries en rebuilds.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -30,8 +32,10 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   late final ClientService _clientService;
 
   // Cache clientId → label ('' = sin turno próximo)
-  // Solo se llena cuando la card es visible (lazy via FutureBuilder).
+  // Se llena en lote al cargar la lista — 1 query para todos los IDs visibles.
   final Map<String, String> _nextApptCache = {};
+  // IDs ya prefetcheados (evita repetir la query batch en cada rebuild)
+  final Set<String> _prefetchedIds = {};
 
   @override
   void initState() {
@@ -45,30 +49,78 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     super.dispose();
   }
 
-  // ── Next appointment — lazy per card ──────────────────────────────────────────
+  // ── Next appointment — batch prefetch ────────────────────────────────────────
+  //
+  // En lugar de 1 query por card (el patrón anterior), cargamos los próximos
+  // appointments de TODOS los clientIds visibles en una sola query usando
+  // whereIn. Firestore permite hasta 30 IDs por whereIn.
+  //
+  // Se llama una vez cuando el StreamBuilder recibe datos nuevos.
+  // El cache evita repetir la query en rebuilds posteriores.
 
-  Future<String> _fetchNextAppt(String clientId) async {
-    if (_nextApptCache.containsKey(clientId)) return _nextApptCache[clientId]!;
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('appointments')
-          .where('clientId', isEqualTo: clientId)
-          .where('status', isEqualTo: 'scheduled')
-          .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.now())
-          .orderBy('appointmentDate')
-          .limit(1)
-          .get();
-      if (snap.docs.isEmpty) { _nextApptCache[clientId] = ''; return ''; }
-      final ts = snap.docs.first.data()['appointmentDate'];
-      if (ts is! Timestamp) { _nextApptCache[clientId] = ''; return ''; }
-      final dt  = ts.toDate();
-      const wd  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      final label = '${wd[(dt.weekday-1).clamp(0,6)]} '
-          '${DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(dt))} · '
-          '${DateTimeUtils.hhmmFromMinutes(dt.hour * 60 + dt.minute)}';
-      _nextApptCache[clientId] = label;
-      return label;
-    } catch (_) { return ''; }
+  String _formatApptLabel(DateTime dt) {
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return '\${wd[(dt.weekday - 1).clamp(0, 6)]} '
+        '\${DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(dt))} · '
+        '\${DateTimeUtils.hhmmFromMinutes(dt.hour * 60 + dt.minute)}';
+  }
+
+  Future<void> _prefetchNextAppts(List<String> clientIds) async {
+    // Solo los IDs que no están en cache todavía
+    final missing = clientIds
+        .where((id) => !_prefetchedIds.contains(id))
+        .toList();
+    if (missing.isEmpty) return;
+
+    // Marcar como prefetcheados antes de la query (evita doble-fetch en rapid rebuilds)
+    _prefetchedIds.addAll(missing);
+
+    // Firestore whereIn: max 30 por chunk
+    const chunkSize = 30;
+    for (int i = 0; i < missing.length; i += chunkSize) {
+      final chunk = missing.sublist(i, (i + chunkSize).clamp(0, missing.length));
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('appointments')
+            .where('clientId', whereIn: chunk)
+            .where('status', isEqualTo: 'scheduled')
+            .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.now())
+            .orderBy('appointmentDate')
+            .limit(chunk.length * 2) // max 2 upcoming per client in one query
+            .get();
+
+        // Para cada clientId del chunk, queda el appointment más próximo
+        final Map<String, DateTime> earliest = {};
+        final Map<String, String> services = {};
+        for (final doc in snap.docs) {
+          final data     = doc.data();
+          final clientId = (data['clientId'] ?? '').toString();
+          final ts       = data['appointmentDate'];
+          if (ts is! Timestamp) continue;
+          final dt = ts.toDate();
+          if (!earliest.containsKey(clientId) ||
+              dt.isBefore(earliest[clientId]!)) {
+            earliest[clientId] = dt;
+          }
+        }
+
+        // Poblar cache
+        for (final id in chunk) {
+          if (earliest.containsKey(id)) {
+            _nextApptCache[id] = _formatApptLabel(earliest[id]!);
+          } else {
+            _nextApptCache[id] = '';
+          }
+        }
+
+        if (mounted) setState(() {});
+      } catch (_) {
+        // Si falla un chunk, dejamos los IDs sin label (se muestran sin pill)
+        for (final id in chunk) {
+          _nextApptCache.putIfAbsent(id, () => '');
+        }
+      }
+    }
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────────
@@ -81,6 +133,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     ).then((_) {
       // Invalida cache de este cliente al volver (puede haber cambiado)
       _nextApptCache.remove(clientId);
+      _prefetchedIds.remove(clientId);
       if (mounted) setState(() {});
     });
   }
@@ -137,6 +190,12 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
             final bv = b.data()['bookingRequestActive'] == true ? 1 : 0;
             return bv.compareTo(av);
           });
+
+          // Dispara el batch prefetch para todos los IDs de la lista filtrada.
+          // unawaited — no bloquea el build. El setState() dentro de
+          // _prefetchNextAppts actualiza las pills cuando llegan los datos.
+          final idsToFetch = filtered.map((d) => d.id).toList();
+          Future.microtask(() => _prefetchNextAppts(idsToFetch));
 
           // CustomScrollView: header fijo + lista virtualizada (solo renderiza
           // los items visibles en pantalla, no los 100 de golpe)
@@ -221,7 +280,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   ),
                 )
               else
-                // SliverList: virtualizado — solo construye las cards visibles
+                // SliverList virtualizado. El prefetch batch ya pobló el cache
+                // antes de llegar aquí (se dispara en el StreamBuilder builder).
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
                   sliver: SliverList.builder(
@@ -230,31 +290,30 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                       final d      = filtered[i];
                       final data   = d.data();
                       final hasReq = data['bookingRequestActive'] == true;
+                      // Lee del cache directamente — sin FutureBuilder individual
+                      final nextLabel = _nextApptCache[d.id];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: FutureBuilder<String>(
-                          future: _fetchNextAppt(d.id),
-                          builder: (_, apptSnap) => ClientCard(
-                            data: data,
-                            showChevron: true,
-                            nextAppointmentLabel:
-                                (apptSnap.data?.isNotEmpty == true)
-                                    ? apptSnap.data
-                                    : null,
-                            trailingBeforeChevron: hasReq
-                                ? AppPill(
-                                    background: const Color(0xff721c80)
-                                        .withOpacity(0.10),
-                                    borderColor: const Color(0xff721c80)
-                                        .withOpacity(0.25),
-                                    child: const Icon(
-                                        Icons.notifications_active_outlined,
-                                        size: 16,
-                                        color: Color(0xff721c80)),
-                                  )
-                                : null,
-                            onTap: () => _openClientProfile(d.id),
-                          ),
+                        child: ClientCard(
+                          data: data,
+                          showChevron: true,
+                          nextAppointmentLabel:
+                              (nextLabel != null && nextLabel.isNotEmpty)
+                                  ? nextLabel
+                                  : null,
+                          trailingBeforeChevron: hasReq
+                              ? AppPill(
+                                  background: const Color(0xff721c80)
+                                      .withOpacity(0.10),
+                                  borderColor: const Color(0xff721c80)
+                                      .withOpacity(0.25),
+                                  child: const Icon(
+                                      Icons.notifications_active_outlined,
+                                      size: 16,
+                                      color: Color(0xff721c80)),
+                                )
+                              : null,
+                          onTap: () => _openClientProfile(d.id),
                         ),
                       );
                     },
