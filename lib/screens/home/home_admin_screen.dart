@@ -26,7 +26,24 @@ class HomeAdminScreen extends StatefulWidget {
 }
 
 class _HomeAdminScreenState extends State<HomeAdminScreen> {
-  HomeAdminMode mode = HomeAdminMode.looking;
+  HomeAdminMode _mode = HomeAdminMode.looking;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _modeStream;
+
+  HomeAdminMode get mode => _mode;
+
+  void _setMode(HomeAdminMode m) {
+    if (_mode == m) return;
+    setState(() {
+      _mode = m;
+      _modeStream = _queryForMode().snapshots();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _modeStream = _queryForMode().snapshots();
+  }
 
   String _fullName(Map<String, dynamic> c, String fallback) {
     final fn   = (c['firstName'] ?? '').toString().trim();
@@ -150,7 +167,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
           children: [
             pill(
               active: mode == HomeAdminMode.looking,
-              onTap: () => setState(() => mode = HomeAdminMode.looking),
+              onTap: () => _setMode(HomeAdminMode.looking),
               icon: Icons.notifications_active_outlined,
               label: 'Looking',
               tint: purple,
@@ -159,7 +176,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             const SizedBox(width: 10),
             pill(
               active: mode == HomeAdminMode.cancelled,
-              onTap: () => setState(() => mode = HomeAdminMode.cancelled),
+              onTap: () => _setMode(HomeAdminMode.cancelled),
               icon: Icons.event_busy_rounded,
               label: 'Cancelled',
               tint: Colors.orange,
@@ -168,7 +185,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             const SizedBox(width: 10),
             pill(
               active: mode == HomeAdminMode.noShow,
-              onTap: () => setState(() => mode = HomeAdminMode.noShow),
+              onTap: () => _setMode(HomeAdminMode.noShow),
               icon: Icons.person_off_rounded,
               label: 'No-show',
               tint: Colors.redAccent,
@@ -224,7 +241,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stream  = _queryForMode().snapshots();
+    final stream  = _modeStream ?? _queryForMode().snapshots();
     final isAdmin = context.watch<UserProvider>().isAdmin;
     final bottomPanelH = isAdmin ? 140.0 : 92.0;
 
@@ -351,7 +368,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                   .doc('__system__')
                   .collection('history')
                   .orderBy('createdAt', descending: true)
-                  .limit(200)
+                  .limit(50)
                   .snapshots(),
               builder: (context, snapA) {
                 final count = snapA.data?.docs.length ?? 0;

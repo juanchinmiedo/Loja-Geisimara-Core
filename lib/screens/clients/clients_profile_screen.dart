@@ -52,6 +52,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   bool _loading = true;
   bool _looking = false;
 
+  // Stats cache: calculado una vez al abrir el perfil y cuando vuelves de
+  // crear/cancelar un appointment. No necesita tiempo real — un FutureBuilder
+  // es suficiente y evita tener un stream abierto permanentemente.
+  ({int requested, int attended, int cancelled, int noShow,
+    Timestamp? lastTs, String lastSummary})? _statsCache;
+  bool _statsLoading = true;
+
   final _fnCtrl      = TextEditingController();
   final _lnCtrl      = TextEditingController();
   final _countryCtrl = TextEditingController();
@@ -71,6 +78,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     _tabController = TabController(length: 2, vsync: this);
     _brRepo = BookingRequestRepo(FirebaseFirestore.instance);
     _loadClient();
+    _loadStats();
   }
 
   @override
@@ -94,6 +102,77 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     _igCtrl.text      = (_clientData['instagram'] ?? '').toString();
     _looking = _clientData['bookingRequestActive'] == true;
     if (mounted) setState(() => _loading = false);
+  }
+
+  // ── Stats — FutureBuilder con cache ──────────────────────────────────────────
+  // Antes era un StreamBuilder sin limit abierto permanentemente (costoso).
+  // Ahora: Future de una sola lectura, cacheado en _statsCache.
+  // Se invalida llamando _loadStats() al volver de acciones que cambian datos.
+
+  Future<void> _loadStats() async {
+    if (!mounted) return;
+    setState(() => _statsLoading = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('appointments')
+          .where('clientId', isEqualTo: widget.clientId)
+          .get();
+
+      final now = DateTime.now();
+      int requested = snap.docs.length;
+      int attended  = 0;
+      int cancelled = 0;
+      int noShow    = 0;
+      Timestamp? lastAttendedTs;
+      String lastAttendedSummary = '';
+
+      for (final d in snap.docs) {
+        final data   = d.data();
+        final status = (data['status'] ?? '').toString();
+        final ts     = data['appointmentDate'];
+        final isPast = ts is Timestamp && ts.toDate().isBefore(now);
+
+        if (status == 'done' || (status == 'scheduled' && isPast)) {
+          attended++;
+          if (ts is Timestamp) {
+            if (lastAttendedTs == null ||
+                ts.toDate().isAfter(lastAttendedTs.toDate())) {
+              lastAttendedTs = ts;
+              lastAttendedSummary =
+                  (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
+                      .toString();
+            }
+          }
+        } else if (status == 'cancelled') {
+          cancelled++;
+        } else if (status == 'noShow') {
+          noShow++;
+        }
+      }
+
+      // Fallback lastTs desde el doc del cliente si no hay attended calculados
+      final s = _stats;
+      final fallbackTs  = lastAttendedTs ?? (s['lastAppointmentAt'] as Timestamp?);
+      final fallbackSum = lastAttendedSummary.isNotEmpty
+          ? lastAttendedSummary
+          : (s['lastAppointmentSummary'] ?? '').toString();
+
+      if (!mounted) return;
+      setState(() {
+        _statsCache = (
+          requested: requested,
+          attended: attended,
+          cancelled: cancelled,
+          noShow: noShow,
+          lastTs: fallbackTs,
+          lastSummary: fallbackSum,
+        );
+        _statsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _statsLoading = false);
+    }
   }
 
   String _fullName() {
@@ -496,6 +575,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Client updated')));
                       await _loadClient();
+                      await _loadStats();
                     },
                     icon: const Icon(Icons.save_outlined, color: Colors.white),
                     label: const Text('Save client',
@@ -828,86 +908,33 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   //   requested = total docs (todos los estados)
 
   Widget _statsOverlay() {
-    final now = DateTime.now();
+    // Usa el cache calculado por _loadStats() — una sola lectura, no un stream.
+    // Mientras carga muestra el fallback del doc del cliente.
+    if (_statsLoading || _statsCache == null) {
+      final s         = _stats;
+      final requested = (s['totalAppointments'] as num?)?.toInt() ?? 0;
+      final attended  = ((s['totalDone']      as num?)?.toInt() ?? 0) +
+                        ((s['totalScheduled'] as num?)?.toInt() ?? 0);
+      final cancelled = (s['totalCancelled']  as num?)?.toInt() ?? 0;
+      final noShow    = (s['totalNoShow']     as num?)?.toInt() ?? 0;
+      return _statsContent(
+        requested: requested,
+        attended: attended,
+        cancelled: cancelled,
+        noShow: noShow,
+        lastTs: s['lastAppointmentAt'] as Timestamp?,
+        lastSummary: (s['lastAppointmentSummary'] ?? '').toString(),
+      );
+    }
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('appointments')
-          .where('clientId', isEqualTo: widget.clientId)
-          .snapshots(),
-      builder: (_, snap) {
-        // Mientras carga, usamos los contadores del doc del cliente como fallback
-        if (!snap.hasData) {
-          final s         = _stats;
-          final requested = (s['totalAppointments'] as num?)?.toInt() ?? 0;
-          final attended  = ((s['totalDone']       as num?)?.toInt() ?? 0) +
-                            ((s['totalScheduled']  as num?)?.toInt() ?? 0);
-          final cancelled = (s['totalCancelled']   as num?)?.toInt() ?? 0;
-          final noShow    = (s['totalNoShow']       as num?)?.toInt() ?? 0;
-          final lastTs    = s['lastAppointmentAt']  as Timestamp?;
-          final lastSum   = (s['lastAppointmentSummary'] ?? '').toString();
-          return _statsContent(
-            requested: requested,
-            attended: attended,
-            cancelled: cancelled,
-            noShow: noShow,
-            lastTs: lastTs,
-            lastSummary: lastSum,
-          );
-        }
-
-        final docs = snap.data!.docs;
-
-        int requested = docs.length;
-        int attended  = 0;
-        int cancelled = 0;
-        int noShow    = 0;
-
-        Timestamp? lastAttendedTs;
-        String lastAttendedSummary = '';
-
-        for (final d in docs) {
-          final data   = d.data();
-          final status = (data['status'] ?? '').toString();
-          final ts     = data['appointmentDate'];
-          final isPast = ts is Timestamp && ts.toDate().isBefore(now);
-
-          // attended = done  OR  scheduled ya pasado (ocurrió aunque no marcado)
-          if (status == 'done' || (status == 'scheduled' && isPast)) {
-            attended++;
-            // El más reciente de los attended → last attended appointment
-            if (ts is Timestamp) {
-              if (lastAttendedTs == null ||
-                  ts.toDate().isAfter(lastAttendedTs.toDate())) {
-                lastAttendedTs = ts;
-                lastAttendedSummary =
-                    (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
-                        .toString();
-              }
-            }
-          } else if (status == 'cancelled') {
-            cancelled++;
-          } else if (status == 'noShow') {
-            noShow++;
-          }
-        }
-
-        // Si no hay attended calculados, fallback al lastAppointmentAt del doc
-        final s = _stats;
-        final fallbackTs  = lastAttendedTs ?? (s['lastAppointmentAt'] as Timestamp?);
-        final fallbackSum = lastAttendedSummary.isNotEmpty
-            ? lastAttendedSummary
-            : (s['lastAppointmentSummary'] ?? '').toString();
-
-        return _statsContent(
-          requested: requested,
-          attended: attended,
-          cancelled: cancelled,
-          noShow: noShow,
-          lastTs: fallbackTs,
-          lastSummary: fallbackSum,
-        );
-      },
+    final c = _statsCache!;
+    return _statsContent(
+      requested: c.requested,
+      attended: c.attended,
+      cancelled: c.cancelled,
+      noShow: c.noShow,
+      lastTs: c.lastTs,
+      lastSummary: c.lastSummary,
     );
   }
 

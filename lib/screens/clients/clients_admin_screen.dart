@@ -108,108 +108,126 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       }
     });
 
+    // Limit 100: carga inicial rápida. Con búsqueda activa se filtra en memoria.
+    // Si se necesitan más clientes, aumentar el límite o implementar cursor pagination.
     final stream = FirebaseFirestore.instance
         .collection('clients')
         .orderBy('updatedAt', descending: true)
-        .limit(400)
+        .limit(100)
         .snapshots();
 
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            AppGradientHeader(
-              title: 'Clients',
-              subtitle: 'Search by name / phone / instagram',
-              child: LayoutBuilder(builder: (_, __) {
-                return Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (_) => setState(() {}),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.95),
-                          prefixIcon: const Icon(Icons.search),
-                          hintText: 'Search',
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 14),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: stream,
+        builder: (_, snap) {
+          final docs = snap.data?.docs ?? [];
+          final q    = _searchCtrl.text.trim().toLowerCase();
+
+          final filtered = q.isEmpty
+              ? docs
+              : docs.where((d) {
+                  final search = (d.data()['search'] as List<dynamic>?)
+                          ?.map((e) => e.toString().toLowerCase())
+                          .toList() ?? [];
+                  return search.any((t) => t.contains(q));
+                }).toList();
+
+          filtered.sort((a, b) {
+            final av = a.data()['bookingRequestActive'] == true ? 1 : 0;
+            final bv = b.data()['bookingRequestActive'] == true ? 1 : 0;
+            return bv.compareTo(av);
+          });
+
+          // CustomScrollView: header fijo + lista virtualizada (solo renderiza
+          // los items visibles en pantalla, no los 100 de golpe)
+          return CustomScrollView(
+            slivers: [
+              // Header con search bar
+              SliverToBoxAdapter(
+                child: AppGradientHeader(
+                  title: 'Clients',
+                  subtitle: 'Search by name / phone / instagram',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white.withOpacity(0.95),
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      height: 44,
-                      width: 44,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _openCreateClientDialog,
-                          borderRadius: BorderRadius.circular(14),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.22),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                  color: Colors.black.withOpacity(0.35)),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.person_add_alt_1_rounded,
-                                  color: Color(0xff721c80), size: 22),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 44,
+                        width: 44,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _openCreateClientDialog,
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.22),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: Colors.black.withOpacity(0.35)),
+                              ),
+                              child: const Center(
+                                child: Icon(Icons.person_add_alt_1_rounded,
+                                    color: Color(0xff721c80), size: 22),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: stream,
-                builder: (_, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: Center(child: CircularProgressIndicator(
-                          color: Colors.purple)),
-                    );
-                  }
-                  if (snap.hasError) {
-                    return Text('Error: ${snap.error}',
-                        style: const TextStyle(color: Colors.red));
-                  }
+                    ],
+                  ),
+                ),
+              ),
 
-                  final docs = snap.data?.docs ?? [];
-                  final q    = _searchCtrl.text.trim().toLowerCase();
-
-                  final filtered = q.isEmpty
-                      ? docs
-                      : docs.where((d) {
-                          final search = (d.data()['search'] as List<dynamic>?)
-                                  ?.map((e) => e.toString().toLowerCase())
-                                  .toList() ?? [];
-                          return search.any((t) => t.contains(q));
-                        }).toList();
-
-                  if (filtered.isEmpty) {
-                    return Text(s.noMatches,
-                        style: TextStyle(color: Colors.grey[700]));
-                  }
-
-                  filtered.sort((a, b) {
-                    final av = a.data()['bookingRequestActive'] == true ? 1 : 0;
-                    final bv = b.data()['bookingRequestActive'] == true ? 1 : 0;
-                    return bv.compareTo(av);
-                  });
-
-                  return Column(
-                    children: filtered.map((d) {
+              // Loading / error / empty
+              if (snap.connectionState == ConnectionState.waiting &&
+                  docs.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 32),
+                    child: Center(
+                        child: CircularProgressIndicator(color: Colors.purple)),
+                  ),
+                )
+              else if (snap.hasError)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Text('Error: ${snap.error}',
+                        style: const TextStyle(color: Colors.red)),
+                  ),
+                )
+              else if (filtered.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+                    child: Text(s.noMatches,
+                        style: TextStyle(color: Colors.grey[700])),
+                  ),
+                )
+              else
+                // SliverList: virtualizado — solo construye las cards visibles
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
+                  sliver: SliverList.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final d      = filtered[i];
                       final data   = d.data();
                       final hasReq = data['bookingRequestActive'] == true;
                       return Padding(
@@ -239,13 +257,12 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                           ),
                         ),
                       );
-                    }).toList(),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

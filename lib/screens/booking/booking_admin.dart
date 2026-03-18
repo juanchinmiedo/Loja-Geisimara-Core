@@ -123,7 +123,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       _tryAutoOpenCreateIfNeeded();
     });
 
-    _servicesSub = db.collection('services').snapshots().listen((snap) {
+    _servicesSub = db.collection('services').limit(100).snapshots().listen((snap) {
       if (!mounted) return;
       setState(() => _services = snap.docs);
       _tryAutoOpenCreateIfNeeded();
