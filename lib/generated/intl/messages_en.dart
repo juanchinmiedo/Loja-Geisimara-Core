@@ -35,20 +35,11 @@ class MessageLookup extends MessageLookupByLibrary {
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
-        "Aservices": MessageLookupByLibrary.simpleMessage("All Services"),
-        "Aspecialists": MessageLookupByLibrary.simpleMessage("All Specialists"),
-        "Bservices": MessageLookupByLibrary.simpleMessage("Best Services"),
-        "Bspecialists":
-            MessageLookupByLibrary.simpleMessage("Best Specialists"),
         "_app_common":
             MessageLookupByLibrary.simpleMessage("Common app strings"),
         "_booking_admin_dialogs": MessageLookupByLibrary.simpleMessage(
             "Texts used in create/edit appointment dialogs"),
         "_carrousel_dart": MessageLookupByLibrary.simpleMessage(
-            "Esto es un comentario sobre el lugar donde estan estos textos"),
-        "_home_screenn": MessageLookupByLibrary.simpleMessage(
-            "Esto es un comentario sobre el lugar donde estan estos textos"),
-        "_maps_screen_dart": MessageLookupByLibrary.simpleMessage(
             "Esto es un comentario sobre el lugar donde estan estos textos"),
         "_onboarding_screenn": MessageLookupByLibrary.simpleMessage(
             "Esto es un comentario sobre el lugar donde estan estos textos"),
@@ -145,11 +136,6 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("No services found"),
         "noSpecialistsFound":
             MessageLookupByLibrary.simpleMessage("No specialists found"),
-        "offers": MessageLookupByLibrary.simpleMessage("Offers"),
-        "openInMaps":
-            MessageLookupByLibrary.simpleMessage("Open in Google Maps"),
-        "openInMapsError":
-            MessageLookupByLibrary.simpleMessage("Could not open Google Maps"),
         "openUrlError": m2,
         "phoneLabel": MessageLookupByLibrary.simpleMessage("Phone"),
         "phoneOrInstagramRequired": MessageLookupByLibrary.simpleMessage(
@@ -201,10 +187,8 @@ class MessageLookup extends MessageLookupByLibrary {
         "typeRequired":
             MessageLookupByLibrary.simpleMessage("Type is required"),
         "unknown": MessageLookupByLibrary.simpleMessage("Unknown"),
-        "viewAll": MessageLookupByLibrary.simpleMessage("View all"),
         "viewProfileAndCatalog":
             MessageLookupByLibrary.simpleMessage("View profile & catalog"),
-        "website": MessageLookupByLibrary.simpleMessage("website"),
         "workerNotFound":
             MessageLookupByLibrary.simpleMessage("Worker not found")
       };

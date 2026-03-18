@@ -1,9 +1,9 @@
 // lib/screens/clients/clients_admin_screen.dart
 //
-// Cambios vs versión anterior:
-//  - Abre ClientProfileScreen en lugar del bottom-sheet.
-//  - Muestra nextAppointmentLabel en cada ClientCard.
-//  - Cache _nextApptCache para no repetir queries en cada rebuild.
+// Commit 5:
+//  • _fetchNextAppt → lazy: solo se consulta cuando la card entra en pantalla
+//    usando un cache + FutureBuilder por item (no para todos a la vez)
+//  • Abre ClientProfileScreen en lugar del bottom-sheet anterior
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +29,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   final _searchCtrl = TextEditingController();
   late final ClientService _clientService;
 
-  // Cache clientId → label formateado ('' = sin turno próximo)
+  // Cache clientId → label ('' = sin turno próximo)
+  // Solo se llena cuando la card es visible (lazy via FutureBuilder).
   final Map<String, String> _nextApptCache = {};
 
   @override
@@ -44,55 +45,44 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     super.dispose();
   }
 
-  // ── Next appointment lookup ──────────────────────────────────────────────────
+  // ── Next appointment — lazy per card ──────────────────────────────────────────
 
   Future<String> _fetchNextAppt(String clientId) async {
-    if (_nextApptCache.containsKey(clientId)) {
-      return _nextApptCache[clientId]!;
-    }
+    if (_nextApptCache.containsKey(clientId)) return _nextApptCache[clientId]!;
     try {
       final snap = await FirebaseFirestore.instance
           .collection('appointments')
           .where('clientId', isEqualTo: clientId)
           .where('status', isEqualTo: 'scheduled')
-          .where('appointmentDate',
-              isGreaterThanOrEqualTo: Timestamp.now())
+          .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.now())
           .orderBy('appointmentDate')
           .limit(1)
           .get();
-
-      if (snap.docs.isEmpty) {
-        _nextApptCache[clientId] = '';
-        return '';
-      }
+      if (snap.docs.isEmpty) { _nextApptCache[clientId] = ''; return ''; }
       final ts = snap.docs.first.data()['appointmentDate'];
-      if (ts is! Timestamp) {
-        _nextApptCache[clientId] = '';
-        return '';
-      }
-      final dt       = ts.toDate();
-      final weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      final wd       = weekdays[(dt.weekday - 1).clamp(0, 6)];
-      final dateStr  = DateTimeUtils.formatYyyyMmDdToDdMmYyyy(
-          DateTimeUtils.yyyymmdd(dt));
-      final timeStr  = DateTimeUtils.hhmmFromMinutes(
-          dt.hour * 60 + dt.minute);
-      final label    = '$wd $dateStr · $timeStr';
+      if (ts is! Timestamp) { _nextApptCache[clientId] = ''; return ''; }
+      final dt  = ts.toDate();
+      const wd  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      final label = '${wd[(dt.weekday-1).clamp(0,6)]} '
+          '${DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(dt))} · '
+          '${DateTimeUtils.hhmmFromMinutes(dt.hour * 60 + dt.minute)}';
       _nextApptCache[clientId] = label;
       return label;
-    } catch (_) {
-      return '';
-    }
+    } catch (_) { return ''; }
   }
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────────
 
   void _openClientProfile(String clientId) {
     Navigator.push(
       context,
       MaterialPageRoute(
           builder: (_) => ClientProfileScreen(clientId: clientId)),
-    );
+    ).then((_) {
+      // Invalida cache de este cliente al volver (puede haber cambiado)
+      _nextApptCache.remove(clientId);
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _openCreateClientDialog() async {
@@ -103,7 +93,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -130,9 +120,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
           children: [
             AppGradientHeader(
               title: 'Clients',
-              subtitle: 'Search by name/phone/instagram',
-              child: LayoutBuilder(builder: (context, _) {
-                const btnSize = 44.0;
+              subtitle: 'Search by name / phone / instagram',
+              child: LayoutBuilder(builder: (_, __) {
                 return Row(
                   children: [
                     Expanded(
@@ -143,7 +132,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                           filled: true,
                           fillColor: Colors.white.withOpacity(0.95),
                           prefixIcon: const Icon(Icons.search),
-                          hintText: 'Search by tokens (name/phone/instagram)',
+                          hintText: 'Search',
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14)),
                           contentPadding: const EdgeInsets.symmetric(
@@ -153,8 +142,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                     ),
                     const SizedBox(width: 10),
                     SizedBox(
-                      height: btnSize,
-                      width: btnSize,
+                      height: 44,
+                      width: 44,
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -179,19 +168,16 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                 );
               }),
             ),
-
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 18, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: stream,
-                builder: (context, snap) {
+                builder: (_, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
                     return const Padding(
                       padding: EdgeInsets.only(top: 12),
-                      child: Center(
-                          child: CircularProgressIndicator(
-                              color: Colors.purple)),
+                      child: Center(child: CircularProgressIndicator(
+                          color: Colors.purple)),
                     );
                   }
                   if (snap.hasError) {
@@ -205,12 +191,9 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   final filtered = q.isEmpty
                       ? docs
                       : docs.where((d) {
-                          final search =
-                              (d.data()['search'] as List<dynamic>?)
-                                      ?.map((e) =>
-                                          e.toString().toLowerCase())
-                                      .toList() ??
-                                  [];
+                          final search = (d.data()['search'] as List<dynamic>?)
+                                  ?.map((e) => e.toString().toLowerCase())
+                                  .toList() ?? [];
                           return search.any((t) => t.contains(q));
                         }).toList();
 
@@ -220,10 +203,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   }
 
                   filtered.sort((a, b) {
-                    final av =
-                        a.data()['bookingRequestActive'] == true ? 1 : 0;
-                    final bv =
-                        b.data()['bookingRequestActive'] == true ? 1 : 0;
+                    final av = a.data()['bookingRequestActive'] == true ? 1 : 0;
+                    final bv = b.data()['bookingRequestActive'] == true ? 1 : 0;
                     return bv.compareTo(av);
                   });
 
@@ -231,37 +212,31 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                     children: filtered.map((d) {
                       final data   = d.data();
                       final hasReq = data['bookingRequestActive'] == true;
-
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: FutureBuilder<String>(
                           future: _fetchNextAppt(d.id),
-                          builder: (_, apptSnap) {
-                            final nextLabel = apptSnap.data;
-                            return ClientCard(
-                              data: data,
-                              showChevron: true,
-                              nextAppointmentLabel:
-                                  (nextLabel != null &&
-                                          nextLabel.isNotEmpty)
-                                      ? nextLabel
-                                      : null,
-                              trailingBeforeChevron: hasReq
-                                  ? AppPill(
-                                      background: const Color(0xff721c80)
-                                          .withOpacity(0.10),
-                                      borderColor: const Color(0xff721c80)
-                                          .withOpacity(0.25),
-                                      child: const Icon(
-                                          Icons
-                                              .notifications_active_outlined,
-                                          size: 16,
-                                          color: Color(0xff721c80)),
-                                    )
-                                  : null,
-                              onTap: () => _openClientProfile(d.id),
-                            );
-                          },
+                          builder: (_, apptSnap) => ClientCard(
+                            data: data,
+                            showChevron: true,
+                            nextAppointmentLabel:
+                                (apptSnap.data?.isNotEmpty == true)
+                                    ? apptSnap.data
+                                    : null,
+                            trailingBeforeChevron: hasReq
+                                ? AppPill(
+                                    background: const Color(0xff721c80)
+                                        .withOpacity(0.10),
+                                    borderColor: const Color(0xff721c80)
+                                        .withOpacity(0.25),
+                                    child: const Icon(
+                                        Icons.notifications_active_outlined,
+                                        size: 16,
+                                        color: Color(0xff721c80)),
+                                  )
+                                : null,
+                            onTap: () => _openClientProfile(d.id),
+                          ),
                         ),
                       );
                     }).toList(),
@@ -310,9 +285,8 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Expanded(
-              child: Text('Create client',
-                  style: TextStyle(fontWeight: FontWeight.w900))),
+          const Expanded(child: Text('Create client',
+              style: TextStyle(fontWeight: FontWeight.w900))),
           IconButton(
               onPressed: _saving ? null : () => Navigator.pop(context),
               icon: const Icon(Icons.close)),
@@ -324,46 +298,33 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
-                  controller: _fnCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'First name',
+              TextFormField(controller: _fnCtrl,
+                  decoration: const InputDecoration(labelText: 'First name',
                       border: OutlineInputBorder()),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Required' : null),
               const SizedBox(height: 10),
-              TextFormField(
-                  controller: _lnCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Last name',
+              TextFormField(controller: _lnCtrl,
+                  decoration: const InputDecoration(labelText: 'Last name',
                       border: OutlineInputBorder()),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Required' : null),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(
-                  flex: 2,
-                  child: TextFormField(
-                      controller: _countryCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Country code',
-                          border: OutlineInputBorder())),
-                ),
+                Expanded(flex: 2, child: TextFormField(
+                    controller: _countryCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Country code',
+                        border: OutlineInputBorder()))),
                 const SizedBox(width: 10),
-                Expanded(
-                  flex: 4,
-                  child: TextFormField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Phone',
-                          border: OutlineInputBorder())),
-                ),
+                Expanded(flex: 4, child: TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Phone',
+                        border: OutlineInputBorder()))),
               ]),
               const SizedBox(height: 10),
-              TextFormField(
-                  controller: _igCtrl,
+              TextFormField(controller: _igCtrl,
                   decoration: const InputDecoration(
                       labelText: 'Instagram (optional)',
                       border: OutlineInputBorder())),
@@ -384,47 +345,39 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                   borderRadius: BorderRadius.circular(14)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            onPressed: _saving
-                ? null
-                : () async {
-                    if (_formKey.currentState?.validate() != true) return;
-                    final ctry = _i(_countryCtrl.text);
-                    final ph   = _i(_phoneCtrl.text);
-                    final ig   = widget.clientService
-                        .normalizeInstagram(_igCtrl.text);
-                    if (ctry == 0 && ph == 0 && ig.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Phone or Instagram required')));
-                      return;
-                    }
-                    setState(() => _saving = true);
-                    try {
-                      await widget.clientService.createOrGetClient(
-                        context: context,
-                        firstName: _fnCtrl.text.trim(),
-                        lastName: _lnCtrl.text.trim(),
-                        country: ctry,
-                        phone: ph,
-                        instagramRaw: _igCtrl.text,
-                      );
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Client created')));
-                    } finally {
-                      if (mounted) setState(() => _saving = false);
-                    }
-                  },
+            onPressed: _saving ? null : () async {
+              if (_formKey.currentState?.validate() != true) return;
+              final ctry = _i(_countryCtrl.text);
+              final ph   = _i(_phoneCtrl.text);
+              final ig   = widget.clientService.normalizeInstagram(_igCtrl.text);
+              if (ctry == 0 && ph == 0 && ig.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Phone or Instagram required')));
+                return;
+              }
+              setState(() => _saving = true);
+              try {
+                await widget.clientService.createOrGetClient(
+                  context: context,
+                  firstName: _fnCtrl.text.trim(),
+                  lastName:  _lnCtrl.text.trim(),
+                  country: ctry, phone: ph,
+                  instagramRaw: _igCtrl.text,
+                );
+                if (!mounted) return;
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Client created')));
+              } finally {
+                if (mounted) setState(() => _saving = false);
+              }
+            },
             child: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
+                ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Text('Create',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900)),
+                : const Text('Create', style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
           ),
         ),
       ],

@@ -33,26 +33,11 @@
   "bookNowTitle": "Agendar Marcação",
   "bookNowSubtitle": "Agende sua consulta em poucos segundos",
 
-  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "openInMaps": "Abrir no Google Maps",
-  "openInMapsError": "Não foi possível abrir o Google Maps",
-
   "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
 
   "title": "Geisimara Nail Designer",
   "intro": "Manicure, Pedicure e Design de Sobrancelhas e Cilios",
   "start": "Começar",
-
-  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "viewAll": "Ver todo",
-  "offers": "Ofertas",
-  "website": "site web",
-  "Bspecialists": "Melhores Especialistas",
-  "Bservices": "Melhores Serviços",
-  "Aservices": "Todos os Serviços",
-  "Aspecialists": "Todos os Especialistas",
 
   "continueWithGoogle": "Continuar com Google",
   "startAdminMode": "Iniciar modo admin",

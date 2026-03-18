@@ -33,26 +33,11 @@
   "bookNowTitle": "Schedule Appointment",
   "bookNowSubtitle": "Schedule your appointment in a few seconds",
 
-  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "openInMaps": "Open in Google Maps",
-  "openInMapsError": "Could not open Google Maps",
-
   "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
 
   "title": "Geisimara Nail Designer",
   "intro": "Manicure, Pedicure and Eyebrows and Eyelashes Design",
   "start": "Get Started",
-
-  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "viewAll": "View all",
-  "offers": "Offers",
-  "website": "website",
-  "Bspecialists": "Best Specialists",
-  "Bservices": "Best Services",
-  "Aservices": "All Services",
-  "Aspecialists": "All Specialists",
 
   "continueWithGoogle": "Continue with Google",
   "startAdminMode": "Start admin mode",

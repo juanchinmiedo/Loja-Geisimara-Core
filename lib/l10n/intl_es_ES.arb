@@ -32,27 +32,12 @@
   "bookNowButton": "Reservar ahora",
   "bookNowTitle": "Agendar Cita",
   "bookNowSubtitle": "Programa tu cita en unos segundos",
-
-  "_maps_screen_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "openInMaps": "Abrir en Google Maps",
-  "openInMapsError": "No se pudo abrir Google Maps",
-
+ 
   "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
 
   "title": "Geisimara Nail Designer",
   "intro": "Manicura, Pedicura y Design de Cejas y Pestañas",
   "start": "Comenzar",
-
-  "_home_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
-
-  "viewAll": "Ver todo",
-  "offers": "Ofertas",
-  "website": "sitio web",
-  "Bspecialists": "Mejores Especialistas",
-  "Bservices": "Mejores Servicios",
-  "Aservices": "Todos los Servicios",
-  "Aspecialists": "Todos los Especialistas",
 
   "continueWithGoogle": "Continuar con Google",
   "startAdminMode": "Iniciar modo admin",

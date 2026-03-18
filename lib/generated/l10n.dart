@@ -311,36 +311,6 @@ class S {
   }
 
   /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _maps_screen_dart {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_maps_screen_dart',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Abrir no Google Maps`
-  String get openInMaps {
-    return Intl.message(
-      'Abrir no Google Maps',
-      name: 'openInMaps',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Não foi possível abrir o Google Maps`
-  String get openInMapsError {
-    return Intl.message(
-      'Não foi possível abrir o Google Maps',
-      name: 'openInMapsError',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
   String get _onboarding_screenn {
     return Intl.message(
       'Esto es un comentario sobre el lugar donde estan estos textos',
@@ -375,86 +345,6 @@ class S {
     return Intl.message(
       'Começar',
       name: 'start',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Esto es un comentario sobre el lugar donde estan estos textos`
-  String get _home_screenn {
-    return Intl.message(
-      'Esto es un comentario sobre el lugar donde estan estos textos',
-      name: '_home_screenn',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Ver todo`
-  String get viewAll {
-    return Intl.message(
-      'Ver todo',
-      name: 'viewAll',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Ofertas`
-  String get offers {
-    return Intl.message(
-      'Ofertas',
-      name: 'offers',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `site web`
-  String get website {
-    return Intl.message(
-      'site web',
-      name: 'website',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Melhores Especialistas`
-  String get Bspecialists {
-    return Intl.message(
-      'Melhores Especialistas',
-      name: 'Bspecialists',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Melhores Serviços`
-  String get Bservices {
-    return Intl.message(
-      'Melhores Serviços',
-      name: 'Bservices',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Todos os Serviços`
-  String get Aservices {
-    return Intl.message(
-      'Todos os Serviços',
-      name: 'Aservices',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Todos os Especialistas`
-  String get Aspecialists {
-    return Intl.message(
-      'Todos os Especialistas',
-      name: 'Aspecialists',
       desc: '',
       args: [],
     );
