@@ -19,6 +19,7 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/services/availability_service.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
@@ -40,24 +41,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   static const Color kPurple = Color(0xff721c80);
   static const Color kGreen  = Color(0xff2e7d32);
 
-  // Business hours (same as home_client_bottom_sheet)
-  static const int _bizStartMin = 7 * 60;
-  static const int _bizEndMax   = 21 * 60;
-  static const int kStepMin     = 5;
 
   late final TabController _tabController;
   late final BookingRequestRepo _brRepo;
+  final _avSvc = AvailabilityService();
 
   Map<String, dynamic> _clientData = {};
   bool _loading = true;
   bool _looking = false;
-
-  // Stats cache: calculado una vez al abrir el perfil y cuando vuelves de
-  // crear/cancelar un appointment. No necesita tiempo real — un FutureBuilder
-  // es suficiente y evita tener un stream abierto permanentemente.
-  ({int requested, int attended, int cancelled, int noShow,
-    Timestamp? lastTs, String lastSummary})? _statsCache;
-  bool _statsLoading = true;
 
   final _fnCtrl      = TextEditingController();
   final _lnCtrl      = TextEditingController();
@@ -78,7 +69,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     _tabController = TabController(length: 2, vsync: this);
     _brRepo = BookingRequestRepo(FirebaseFirestore.instance);
     _loadClient();
-    _loadStats();
   }
 
   @override
@@ -102,77 +92,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     _igCtrl.text      = (_clientData['instagram'] ?? '').toString();
     _looking = _clientData['bookingRequestActive'] == true;
     if (mounted) setState(() => _loading = false);
-  }
-
-  // ── Stats — FutureBuilder con cache ──────────────────────────────────────────
-  // Antes era un StreamBuilder sin limit abierto permanentemente (costoso).
-  // Ahora: Future de una sola lectura, cacheado en _statsCache.
-  // Se invalida llamando _loadStats() al volver de acciones que cambian datos.
-
-  Future<void> _loadStats() async {
-    if (!mounted) return;
-    setState(() => _statsLoading = true);
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('appointments')
-          .where('clientId', isEqualTo: widget.clientId)
-          .get();
-
-      final now = DateTime.now();
-      int requested = snap.docs.length;
-      int attended  = 0;
-      int cancelled = 0;
-      int noShow    = 0;
-      Timestamp? lastAttendedTs;
-      String lastAttendedSummary = '';
-
-      for (final d in snap.docs) {
-        final data   = d.data();
-        final status = (data['status'] ?? '').toString();
-        final ts     = data['appointmentDate'];
-        final isPast = ts is Timestamp && ts.toDate().isBefore(now);
-
-        if (status == 'done' || (status == 'scheduled' && isPast)) {
-          attended++;
-          if (ts is Timestamp) {
-            if (lastAttendedTs == null ||
-                ts.toDate().isAfter(lastAttendedTs.toDate())) {
-              lastAttendedTs = ts;
-              lastAttendedSummary =
-                  (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
-                      .toString();
-            }
-          }
-        } else if (status == 'cancelled') {
-          cancelled++;
-        } else if (status == 'noShow') {
-          noShow++;
-        }
-      }
-
-      // Fallback lastTs desde el doc del cliente si no hay attended calculados
-      final s = _stats;
-      final fallbackTs  = lastAttendedTs ?? (s['lastAppointmentAt'] as Timestamp?);
-      final fallbackSum = lastAttendedSummary.isNotEmpty
-          ? lastAttendedSummary
-          : (s['lastAppointmentSummary'] ?? '').toString();
-
-      if (!mounted) return;
-      setState(() {
-        _statsCache = (
-          requested: requested,
-          attended: attended,
-          cancelled: cancelled,
-          noShow: noShow,
-          lastTs: fallbackTs,
-          lastSummary: fallbackSum,
-        );
-        _statsLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _statsLoading = false);
-    }
   }
 
   String _fullName() {
@@ -220,173 +139,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           .limit(100)
           .snapshots();
 
-  // ── Availability helpers (copiados de home_client_bottom_sheet) ───────────────
-
-  DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
-  DateTime _endExclusive(DateTime d) =>
-      DateTime(d.year, d.month, d.day).add(const Duration(days: 1));
-
-  int _requestedDurationMin(Map<String, dynamic> br) {
-    final v = br['durationMin'];
-    if (v is num) return v.toInt();
-    return 30;
-  }
-
-  int _allowedOverlapMin(int durMin) => (durMin > 60) ? 15 : 0;
-
-  int _overlapMin(int a0, int a1, int b0, int b1) {
-    final s = a0 > b0 ? a0 : b0;
-    final e = a1 < b1 ? a1 : b1;
-    return (e > s) ? (e - s) : 0;
-  }
-
-  bool _slotOkForWorker({
-    required DateTime day,
-    required int startMin,
-    required int durMin,
-    required String workerId,
-    required int allowedOverlap,
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
-  }) {
-    final endMin = startMin + durMin;
-    for (final a in appts) {
-      final data = a.data();
-      if ((data['status'] ?? '').toString() != 'scheduled') continue;
-      if ((data['workerId'] ?? '').toString().trim() != workerId) continue;
-      final ts = data['appointmentDate'];
-      if (ts is! Timestamp) continue;
-      final dt = ts.toDate();
-      if (dt.year != day.year || dt.month != day.month || dt.day != day.day) continue;
-      final adur = (data['durationMin'] is num)
-          ? (data['durationMin'] as num).toInt() : 0;
-      if (adur <= 0) continue;
-      final a0 = dt.hour * 60 + dt.minute;
-      if (_overlapMin(startMin, endMin, a0, a0 + adur) > allowedOverlap) return false;
-    }
-    return true;
-  }
-
-  DateTime? _firstSlotOnDay({
-    required DateTime day,
-    required List<Map<String, int>> ranges,
-    required int durMin,
-    required String workerId,
-    required int allowedOverlap,
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
-  }) {
-    for (final r in ranges) {
-      final rs = (r['startMin'] ?? 0) < _bizStartMin
-          ? _bizStartMin : (r['startMin'] ?? 0);
-      final re = (r['endMin'] ?? 24 * 60) > _bizEndMax
-          ? _bizEndMax : (r['endMin'] ?? 24 * 60);
-      if (re - rs < durMin) continue;
-      for (int s = rs; s + durMin <= re; s += kStepMin) {
-        if (_slotOkForWorker(
-          day: day, startMin: s, durMin: durMin,
-          workerId: workerId, allowedOverlap: allowedOverlap, appts: appts,
-        )) {
-          return DateTime(day.year, day.month, day.day, s ~/ 60, s % 60);
-        }
-      }
-    }
-    return null;
-  }
-
-  List<Map<String, int>> _extractRanges(Map<String, dynamic> br) {
-    final raw = (br['preferredTimeRanges'] as List?) ?? const [];
-    if (raw.isEmpty) return const [{'startMin': 0, 'endMin': 24 * 60}];
-    final out = <Map<String, int>>[];
-    for (final r in raw) {
-      if (r is! Map) continue;
-      final m  = Map<String, dynamic>.from(r);
-      final s  = (m['startMin'] ?? m['start']);
-      final e  = (m['endMin']   ?? m['end']);
-      final sm = (s is num) ? s.toInt() : int.tryParse('$s') ?? -1;
-      final em = (e is num) ? e.toInt() : int.tryParse('$e') ?? -1;
-      if (sm >= 0 && em > sm) out.add({'startMin': sm, 'endMin': em});
-    }
-    return out.isEmpty ? const [{'startMin': 0, 'endMin': 24 * 60}] : out;
-  }
-
-  /// Compute availability for one booking request given loaded appointments.
-  ({BookingRequestAvailability status, DateTime? nextStart}) _availabilityFor(
-    Map<String, dynamic> br,
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
-  ) {
-    final workerIdRaw = (br['workerId'] ?? '').toString().trim();
-    if (workerIdRaw.isEmpty) {
-      return (status: BookingRequestAvailability.unknown, nextStart: null);
-    }
-
-    final preferredDays = (br['preferredDays'] as List?)
-            ?.map((e) => e.toString())
-            .where((s) => s.trim().isNotEmpty)
-            .toList() ?? const <String>[];
-
-    if (preferredDays.isEmpty) {
-      return (status: BookingRequestAvailability.unknown, nextStart: null);
-    }
-
-    final ranges       = _extractRanges(br);
-    final durMin       = _requestedDurationMin(br);
-    final allowedOv    = _allowedOverlapMin(durMin);
-
-    final parsedDays = preferredDays
-        .map((k) => BookingRequestUtils.parseYyyymmdd(k))
-        .whereType<DateTime>()
-        .toList()
-      ..sort((a, b) => a.compareTo(b));
-
-    for (final day in parsedDays) {
-      final first = _firstSlotOnDay(
-        day: day, ranges: ranges, durMin: durMin,
-        workerId: workerIdRaw, allowedOverlap: allowedOv, appts: appts,
-      );
-      if (first != null) {
-        return (status: BookingRequestAvailability.available, nextStart: first);
-      }
-    }
-    return (status: BookingRequestAvailability.unavailable, nextStart: null);
-  }
-
-  String _pillLabel(BookingRequestAvailability status, DateTime? nextStart) {
-    if (status == BookingRequestAvailability.unknown) return 'Checking…';
-    if (status == BookingRequestAvailability.unavailable) return 'No availability';
-    if (nextStart == null) return ' ';
-    final hm   = DateTimeUtils.hhmmFromMinutes(
-        nextStart.hour * 60 + nextStart.minute);
-    final ddmm = '${nextStart.day.toString().padLeft(2,'0')}/'
-                 '${nextStart.month.toString().padLeft(2,'0')}';
-    return '$hm · $ddmm';
-  }
-
-  // ── Appointments stream for a date range (for availability computation) ───────
-
-  Stream<QuerySnapshot<Map<String, dynamic>>>? _apptStreamForRequests(
-    List<Map<String, dynamic>> brList,
-  ) {
-    DateTime? minDay, maxDay;
-    for (final br in brList) {
-      final days = (br['preferredDays'] as List?)
-              ?.map((e) => e.toString()).toList() ?? const <String>[];
-      for (final k in days) {
-        final dt = BookingRequestUtils.parseYyyymmdd(k);
-        if (dt == null) continue;
-        if (minDay == null || dt.isBefore(minDay)) minDay = dt;
-        if (maxDay == null || dt.isAfter(maxDay)) maxDay = dt;
-      }
-    }
-    if (minDay == null || maxDay == null) return null;
-    return FirebaseFirestore.instance
-        .collection('appointments')
-        .where('appointmentDate',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfDay(minDay)))
-        .where('appointmentDate',
-            isLessThan: Timestamp.fromDate(_endExclusive(maxDay)))
-        .snapshots();
-  }
-
-  // ── Range helpers ─────────────────────────────────────────────────────────────
+  // ── Range helpers ─────────────────────────────────────────────────────────
 
   bool _rangesFitDuration(List<Map<String, int>> ranges, int dur) {
     if (ranges.isEmpty) return true;
@@ -416,14 +169,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         context: context, initial: const TimeOfDay(hour: 9, minute: 0));
     if (start == null) return;
     final fs = TimeOfDayUtils.clamp(start,
-        minMinutes: _bizStartMin, maxMinutes: _bizEndMax - 15);
+        minMinutes: AvailabilityService.bizStartMin, maxMinutes: AvailabilityService.bizEndMax - 15);
     final end = await AppTimePicker.pick5m(
         context: context,
         initial: TimeOfDayUtils.fromMinutes(
             TimeOfDayUtils.toMinutes(fs) + 15));
     if (end == null) return;
     var fe = TimeOfDayUtils.clamp(end,
-        minMinutes: _bizStartMin + 15, maxMinutes: _bizEndMax);
+        minMinutes: AvailabilityService.bizStartMin + 15, maxMinutes: AvailabilityService.bizEndMax);
     if (TimeOfDayUtils.isBefore(fe, fs)) fe = fs;
     setState(() => _brRanges.add(BookingRequestUtils.range(fs, fe)));
   }
@@ -575,7 +328,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Client updated')));
                       await _loadClient();
-                      await _loadStats();
                     },
                     icon: const Icon(Icons.save_outlined, color: Colors.white),
                     label: const Text('Save client',
@@ -908,33 +660,86 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   //   requested = total docs (todos los estados)
 
   Widget _statsOverlay() {
-    // Usa el cache calculado por _loadStats() — una sola lectura, no un stream.
-    // Mientras carga muestra el fallback del doc del cliente.
-    if (_statsLoading || _statsCache == null) {
-      final s         = _stats;
-      final requested = (s['totalAppointments'] as num?)?.toInt() ?? 0;
-      final attended  = ((s['totalDone']      as num?)?.toInt() ?? 0) +
-                        ((s['totalScheduled'] as num?)?.toInt() ?? 0);
-      final cancelled = (s['totalCancelled']  as num?)?.toInt() ?? 0;
-      final noShow    = (s['totalNoShow']     as num?)?.toInt() ?? 0;
-      return _statsContent(
-        requested: requested,
-        attended: attended,
-        cancelled: cancelled,
-        noShow: noShow,
-        lastTs: s['lastAppointmentAt'] as Timestamp?,
-        lastSummary: (s['lastAppointmentSummary'] ?? '').toString(),
-      );
-    }
+    final now = DateTime.now();
 
-    final c = _statsCache!;
-    return _statsContent(
-      requested: c.requested,
-      attended: c.attended,
-      cancelled: c.cancelled,
-      noShow: c.noShow,
-      lastTs: c.lastTs,
-      lastSummary: c.lastSummary,
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('appointments')
+          .where('clientId', isEqualTo: widget.clientId)
+          .snapshots(),
+      builder: (_, snap) {
+        // Mientras carga, usamos los contadores del doc del cliente como fallback
+        if (!snap.hasData) {
+          final s         = _stats;
+          final requested = (s['totalAppointments'] as num?)?.toInt() ?? 0;
+          final attended  = ((s['totalDone']       as num?)?.toInt() ?? 0) +
+                            ((s['totalScheduled']  as num?)?.toInt() ?? 0);
+          final cancelled = (s['totalCancelled']   as num?)?.toInt() ?? 0;
+          final noShow    = (s['totalNoShow']       as num?)?.toInt() ?? 0;
+          final lastTs    = s['lastAppointmentAt']  as Timestamp?;
+          final lastSum   = (s['lastAppointmentSummary'] ?? '').toString();
+          return _statsContent(
+            requested: requested,
+            attended: attended,
+            cancelled: cancelled,
+            noShow: noShow,
+            lastTs: lastTs,
+            lastSummary: lastSum,
+          );
+        }
+
+        final docs = snap.data!.docs;
+
+        int requested = docs.length;
+        int attended  = 0;
+        int cancelled = 0;
+        int noShow    = 0;
+
+        Timestamp? lastAttendedTs;
+        String lastAttendedSummary = '';
+
+        for (final d in docs) {
+          final data   = d.data();
+          final status = (data['status'] ?? '').toString();
+          final ts     = data['appointmentDate'];
+          final isPast = ts is Timestamp && ts.toDate().isBefore(now);
+
+          // attended = done  OR  scheduled ya pasado (ocurrió aunque no marcado)
+          if (status == 'done' || (status == 'scheduled' && isPast)) {
+            attended++;
+            // El más reciente de los attended → last attended appointment
+            if (ts is Timestamp) {
+              if (lastAttendedTs == null ||
+                  ts.toDate().isAfter(lastAttendedTs.toDate())) {
+                lastAttendedTs = ts;
+                lastAttendedSummary =
+                    (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
+                        .toString();
+              }
+            }
+          } else if (status == 'cancelled') {
+            cancelled++;
+          } else if (status == 'noShow') {
+            noShow++;
+          }
+        }
+
+        // Si no hay attended calculados, fallback al lastAppointmentAt del doc
+        final s = _stats;
+        final fallbackTs  = lastAttendedTs ?? (s['lastAppointmentAt'] as Timestamp?);
+        final fallbackSum = lastAttendedSummary.isNotEmpty
+            ? lastAttendedSummary
+            : (s['lastAppointmentSummary'] ?? '').toString();
+
+        return _statsContent(
+          requested: requested,
+          attended: attended,
+          cancelled: cancelled,
+          noShow: noShow,
+          lastTs: fallbackTs,
+          lastSummary: fallbackSum,
+        );
+      },
     );
   }
 
@@ -1068,7 +873,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                   .toList();
 
               // Stream de appointments en el rango de fechas de los requests
-              final apptStream = _apptStreamForRequests(brDataList);
+              final apptStream = _avSvc.apptStreamForRequests(brDataList);
 
               Widget buildCards(
                 List<QueryDocumentSnapshot<Map<String, dynamic>>> apptDocs,
@@ -1082,8 +887,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     const SizedBox(height: 8),
                     ...brDocs.map((d) {
                       final br   = d.data();
-                      final info = _availabilityFor(br, apptDocs);
-                      final lbl  = _pillLabel(info.status, info.nextStart);
+                      final info = _avSvc.availabilityFor(br: br, appts: apptDocs);
+                      final lbl  = _avSvc.pillLabel(info.status, info.nextStart);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: BookingRequestCard(
