@@ -745,7 +745,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
 
   // ── Appointment card ──────────────────────────────────────────────────────────
 
-  Widget _apptCard(Map<String, dynamic> d) {
+  Widget _apptCard(Map<String, dynamic> d, {bool isPast = false}) {
     final ts         = d['appointmentDate'];
     final date       = ts is Timestamp ? ts.toDate() : null;
     final dateStr    = date != null
@@ -754,15 +754,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     final timeStr    = date != null
         ? DateTimeUtils.hhmmFromMinutes(date.hour * 60 + date.minute) : '';
     final service    = (d['serviceName'] ?? d['service'] ?? '').toString();
-    final status     = (d['status'] ?? '').toString();
+    final rawStatus  = (d['status'] ?? '').toString();
     final workerName = (d['workerName'] ?? d['workerId'] ?? '').toString();
 
+    final displayStatus = (isPast && rawStatus == 'scheduled')
+        ? 'attended'
+        : rawStatus;
+
     final statusColor = {
-      'scheduled': kPurple,
-      'done':      Colors.green,
-      'cancelled': Colors.red,
-      'noShow':    Colors.orange,
-    }[status] ?? Colors.grey;
+      'scheduled':      kPurple,
+      'done':           Colors.green,
+      'attended':       Colors.green,
+      'cancelled':      Colors.red,
+      'noShow':         Colors.orange,
+    }[displayStatus] ?? Colors.grey;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -797,7 +802,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               color: statusColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(status,
+            child: Text(displayStatus,
                 style: TextStyle(color: statusColor,
                     fontWeight: FontWeight.w700, fontSize: 12)),
           ),
@@ -810,15 +815,110 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   // Sin container propio, pills sobre el morado, last visit arriba,
   // 4 stats en una línea con FittedBox para ser responsive.
 
-  Widget _statsOverlay() {
-    final s           = _stats;
-    final requested   = (s['totalAppointments'] as num?)?.toInt() ?? 0;
-    final attended    = (s['totalScheduled']    as num?)?.toInt() ?? 0;
-    final cancelled   = (s['totalCancelled']    as num?)?.toInt() ?? 0;
-    final noShow      = (s['totalNoShow']        as num?)?.toInt() ?? 0;
-    final lastTs      = s['lastAppointmentAt']  as Timestamp?;
-    final lastSummary = (s['lastAppointmentSummary'] ?? '').toString();
+  // ── Stats calculadas en tiempo real desde appointments ───────────────────────
+  //
+  // No usamos stats.totalScheduled/totalDone del doc de cliente porque:
+  //   - scheduled pasado = attended (ya ocurrió aunque no se marcó como done)
+  //   - La fuente de verdad es la colección appointments, no los contadores
+  //
+  // Lógica:
+  //   attended  = done  +  scheduled con fecha pasada
+  //   cancelled = cancelled
+  //   noShow    = noShow
+  //   requested = total docs (todos los estados)
 
+  Widget _statsOverlay() {
+    final now = DateTime.now();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('appointments')
+          .where('clientId', isEqualTo: widget.clientId)
+          .snapshots(),
+      builder: (_, snap) {
+        // Mientras carga, usamos los contadores del doc del cliente como fallback
+        if (!snap.hasData) {
+          final s         = _stats;
+          final requested = (s['totalAppointments'] as num?)?.toInt() ?? 0;
+          final attended  = ((s['totalDone']       as num?)?.toInt() ?? 0) +
+                            ((s['totalScheduled']  as num?)?.toInt() ?? 0);
+          final cancelled = (s['totalCancelled']   as num?)?.toInt() ?? 0;
+          final noShow    = (s['totalNoShow']       as num?)?.toInt() ?? 0;
+          final lastTs    = s['lastAppointmentAt']  as Timestamp?;
+          final lastSum   = (s['lastAppointmentSummary'] ?? '').toString();
+          return _statsContent(
+            requested: requested,
+            attended: attended,
+            cancelled: cancelled,
+            noShow: noShow,
+            lastTs: lastTs,
+            lastSummary: lastSum,
+          );
+        }
+
+        final docs = snap.data!.docs;
+
+        int requested = docs.length;
+        int attended  = 0;
+        int cancelled = 0;
+        int noShow    = 0;
+
+        Timestamp? lastAttendedTs;
+        String lastAttendedSummary = '';
+
+        for (final d in docs) {
+          final data   = d.data();
+          final status = (data['status'] ?? '').toString();
+          final ts     = data['appointmentDate'];
+          final isPast = ts is Timestamp && ts.toDate().isBefore(now);
+
+          // attended = done  OR  scheduled ya pasado (ocurrió aunque no marcado)
+          if (status == 'done' || (status == 'scheduled' && isPast)) {
+            attended++;
+            // El más reciente de los attended → last attended appointment
+            if (ts is Timestamp) {
+              if (lastAttendedTs == null ||
+                  ts.toDate().isAfter(lastAttendedTs.toDate())) {
+                lastAttendedTs = ts;
+                lastAttendedSummary =
+                    (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
+                        .toString();
+              }
+            }
+          } else if (status == 'cancelled') {
+            cancelled++;
+          } else if (status == 'noShow') {
+            noShow++;
+          }
+        }
+
+        // Si no hay attended calculados, fallback al lastAppointmentAt del doc
+        final s = _stats;
+        final fallbackTs  = lastAttendedTs ?? (s['lastAppointmentAt'] as Timestamp?);
+        final fallbackSum = lastAttendedSummary.isNotEmpty
+            ? lastAttendedSummary
+            : (s['lastAppointmentSummary'] ?? '').toString();
+
+        return _statsContent(
+          requested: requested,
+          attended: attended,
+          cancelled: cancelled,
+          noShow: noShow,
+          lastTs: fallbackTs,
+          lastSummary: fallbackSum,
+        );
+      },
+    );
+  }
+
+  Widget _statsContent({
+    required int requested,
+    required int attended,
+    required int cancelled,
+    required int noShow,
+    required Timestamp? lastTs,
+    required String lastSummary,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -843,7 +943,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           const SizedBox(height: 6),
         ],
 
-        // 4 pills en una línea — FittedBox para ajustarse al ancho del móvil
+        // 4 pills en una línea — FittedBox responsive
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
@@ -1066,7 +1166,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: docs.length,
-          itemBuilder: (_, i) => _apptCard(docs[i].data()),
+          itemBuilder: (_, i) => _apptCard(docs[i].data(), isPast: true),
         );
       },
     );
