@@ -11,6 +11,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/widgets/language_pill.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/components/ui/app_gradient_header.dart';
@@ -1128,7 +1129,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           body: Center(child: CircularProgressIndicator(color: kPurple)));
     }
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       body: Column(
         children: [
           AppGradientHeader(
@@ -1157,6 +1160,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           _bottomBar(),
         ],
       ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          right: 18,
+          child: const LanguagePill(),
+        ),
+      ],
     );
   }
 }

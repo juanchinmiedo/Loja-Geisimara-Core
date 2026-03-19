@@ -5,6 +5,7 @@
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/widgets/language_pill.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -75,7 +76,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         context.watch<UserProvider>().user ??
         FirebaseAuth.instance.currentUser;
 
-    return Scaffold(
+    return Stack(
+      children: [
+      Scaffold(
       appBar: AppBar(
         title:
             const Text('Profile', style: TextStyle(color: Colors.white)),
@@ -88,7 +91,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : user == null
               ? _buildLoggedOutView()
               : _buildLoggedInView(context, user),
-    );
+    ),
+      Positioned(
+        top: MediaQuery.of(context).padding.top + 10,
+        right: 18,
+        child: const LanguagePill(),
+      ),
+    ]);
   }
 
   Widget _buildLoggedOutView() {
