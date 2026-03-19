@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/utils/date_labels.dart';
 
 class PrettyDateStrip extends StatefulWidget {
@@ -109,8 +110,9 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final isAtToday = _same(_sel, _today);
-    final monthLabel = months(_sel.month);
+    final monthLabel = monthsL10n(_sel.month, s);
 
     return Column(
       children: [
@@ -147,8 +149,9 @@ class _PrettyDateStripState extends State<PrettyDateStrip> {
               final d = _today.add(Duration(days: idx));
               final selected = _same(d, _sel);
 
-              final mon = months(d.month);   // MES arriba
-              final dow = week(d.weekday);   // DOW abajo
+              final s   = S.of(context);
+              final mon = monthsL10n(d.month, s);   // MES arriba
+              final dow = weekL10n(d.weekday, s);   // DOW abajo
 
               // ✅ no seleccionado: sin borde (solo fondo leve)
               final bg = selected ? Colors.white : Colors.transparent;

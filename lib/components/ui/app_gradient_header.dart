@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:salon_app/provider/locale_provider.dart';
 
-/// Header gradient original — sin modificaciones de layout.
-/// El selector de idioma y la campana se ponen como Positioned
-/// en el Stack de cada pantalla, encima del header.
 class AppGradientHeader extends StatelessWidget {
   const AppGradientHeader({
     super.key,
@@ -14,6 +13,7 @@ class AppGradientHeader extends StatelessWidget {
     this.colors = const [Color(0xff721c80), Color.fromARGB(255, 196, 103, 169)],
     this.centerTitle = false,
     this.titleStyle,
+    this.showLanguageSelector = true,
   });
 
   final String title;
@@ -24,6 +24,7 @@ class AppGradientHeader extends StatelessWidget {
   final List<Color> colors;
   final bool centerTitle;
   final TextStyle? titleStyle;
+  final bool showLanguageSelector;
 
   @override
   Widget build(BuildContext context) {
@@ -49,29 +50,111 @@ class AppGradientHeader extends StatelessWidget {
           bottomRight: Radius.circular(30),
         ),
       ),
-      child: Padding(
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: centerTitle
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.start,
-          children: [
-            if (centerTitle)
-              Center(child: Text(title, style: tStyle))
-            else
-              Text(title, style: tStyle),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              Text(subtitle!,
-                  style: TextStyle(color: Colors.white.withOpacity(0.9))),
-            ],
-            if (child != null) ...[
-              const SizedBox(height: 10),
-              child!,
-            ],
-          ],
+      // Stack inside the gradient container — pill floats top-right,
+      // content fills the rest. Container has fixed height so pill is always visible.
+      child: Stack(
+        children: [
+          Padding(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: centerTitle
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
+              children: [
+                if (centerTitle)
+                  Center(child: Text(title, style: tStyle))
+                else
+                  Text(title, style: tStyle),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 8),
+                  Text(subtitle!,
+                      style: TextStyle(color: Colors.white.withOpacity(0.9))),
+                ],
+                if (child != null) ...[
+                  const SizedBox(height: 10),
+                  child!,
+                ],
+              ],
+            ),
+          ),
+          if (showLanguageSelector)
+            Positioned(
+              top: padding.top,
+              right: 18,
+              child: const _LanguagePill(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Language selector pill — lives inside the gradient header ─────────────────
+
+class _LanguagePill extends StatelessWidget {
+  const _LanguagePill();
+
+  static const _langs = [
+    _Lang('PT', 'pt'),
+    _Lang('EN', 'en'),
+    _Lang('ES', 'es'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final locale  = context.watch<LocaleProvider>().locale;
+    final current = locale.languageCode;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.30)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: _langs.map((lang) {
+            final isActive = lang.code == current;
+            return GestureDetector(
+              onTap: isActive
+                  ? null
+                  : () => context
+                      .read<LocaleProvider>()
+                      .setLocaleByLanguageCode(lang.code),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? Colors.white.withOpacity(0.90)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  lang.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    decoration: TextDecoration.none,
+                    color: isActive
+                        ? const Color(0xff721c80)
+                        : Colors.white.withOpacity(0.80),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
   }
+}
+
+class _Lang {
+  const _Lang(this.label, this.code);
+  final String label;
+  final String code;
 }

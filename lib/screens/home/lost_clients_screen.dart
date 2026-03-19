@@ -2,7 +2,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:salon_app/widgets/language_pill.dart';
 
 import 'package:salon_app/components/client_card.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
@@ -36,9 +35,7 @@ class _LostClientsScreenState extends State<LostClientsScreen>
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    return Stack(
-      children: [
-      Scaffold(
+    return Scaffold(
       body: Column(
         children: [
           AppGradientHeader(
@@ -91,13 +88,7 @@ class _LostClientsScreenState extends State<LostClientsScreen>
           ),
         ],
       ),
-      ),
-      Positioned(
-        top: MediaQuery.of(context).padding.top + 10,
-        right: 18,
-        child: const LanguagePill(),
-      ),
-    ]);
+      );
   }
 }
 

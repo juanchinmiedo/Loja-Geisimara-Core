@@ -7,7 +7,6 @@
 //  • Todo lo demás (dialogs, lifecycle, day tile) idéntico
 
 import 'dart:async';
-import 'package:salon_app/widgets/language_pill.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -236,20 +235,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
-  Widget _withPill(BuildContext context, Widget child) {
-    return Stack(
-      children: [
-        child,
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 10,
-          right: 18,
-          child: const LanguagePill(),
-        ),
-      ],
-    );
-  }
-
-  @override
+@override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final dayStart  = Timestamp.fromDate(_startOfDay(_selectedDay));
@@ -321,7 +307,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
 
     if (view.isWeek) {
-      return _withPill(context, Scaffold(
+      return Scaffold(
         body: Column(
           children: [
             headerAndControls(),
@@ -338,10 +324,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      ));
+      );
     }
 
-    return _withPill(context, Scaffold(
+    return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -358,7 +344,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      )));
+      ),
+    );
   }
 
   // ── Week view ─────────────────────────────────────────────────────────────────

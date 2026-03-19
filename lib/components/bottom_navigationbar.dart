@@ -14,7 +14,7 @@ class BottomNavigationComponent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = S.of(context);
+    final s   = S.of(context);
     final nav = context.watch<AdminNavProvider>();
     final bookingClientId = nav.bookingClientId;
 

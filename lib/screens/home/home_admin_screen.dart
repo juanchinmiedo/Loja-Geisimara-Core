@@ -9,7 +9,6 @@ import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/provider/user_provider.dart';
 
 import 'package:salon_app/components/ui/app_gradient_header.dart';
-import 'package:salon_app/widgets/language_pill.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 
@@ -361,12 +360,6 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
           ),
 
           // Campana + badge
-          // Language pill
-          Positioned(
-            right: 18,
-            top: MediaQuery.of(context).padding.top + 10,
-            child: const LanguagePill(),
-          ),
 
           // Campana + badge
           Positioned(

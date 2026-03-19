@@ -4,15 +4,18 @@
 // Muestra roles reales desde UserProvider (Custom Claims).
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:salon_app/widgets/language_pill.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/controller/auth_controller.dart';
+import 'package:salon_app/generated/l10n.dart';
+import 'package:salon_app/widgets/language_pill.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/screens/introduction/onboarding_screen.dart';
+import 'package:salon_app/utils/localization_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -72,18 +75,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final user =
         context.watch<UserProvider>().user ??
         FirebaseAuth.instance.currentUser;
 
-    return Stack(
-      children: [
-      Scaffold(
+    return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Profile', style: TextStyle(color: Colors.white)),
+        title: Text(s.profileTab, style: const TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xff721c80),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: const [Padding(padding: EdgeInsets.only(right: 8), child: LanguagePill())],
       ),
       body: _isLoading
           ? const Center(
@@ -91,16 +93,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : user == null
               ? _buildLoggedOutView()
               : _buildLoggedInView(context, user),
-    ),
-      Positioned(
-        top: MediaQuery.of(context).padding.top + 10,
-        right: 18,
-        child: const LanguagePill(),
-      ),
-    ]);
+    );
   }
 
   Widget _buildLoggedOutView() {
+    final s = S.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -111,7 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 size: 80, color: Color(0xff721c80)),
             const SizedBox(height: 16),
             Text(
-              'Sign in to manage your appointments',
+              s.signInToManage,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[700], fontSize: 16),
             ),
@@ -126,8 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               onPressed: _handleGoogleSignIn,
               icon: const Icon(Icons.login, color: Colors.white),
-              label: const Text('Continue with Google',
-                  style: TextStyle(color: Colors.white, fontSize: 16)),
+              label: Text(s.continueWithGoogle, style: const TextStyle(color: Colors.white, fontSize: 16)),
             ),
           ],
         ),
@@ -136,19 +132,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildLoggedInView(BuildContext context, User user) {
+    final s = S.of(context);
     // Lee roles y workerId desde UserProvider (Custom Claims) — no Firestore
     final userProvider = context.watch<UserProvider>();
     final rolesText = userProvider.roles.isEmpty
-        ? 'No roles assigned'
+        ? s.noRolesAssigned
         : userProvider.roles.join(', ');
     final workerId = userProvider.workerId ?? '—';
     final accessType = userProvider.isWorkerAdmin
-        ? 'Admin + Worker'
+        ? s.adminWorkerRole
         : userProvider.isAdmin
-            ? 'Admin'
+            ? s.adminRole
             : userProvider.isWorker
-                ? 'Worker'
-                : 'No access';
+                ? s.workerRole
+                : s.noAccess;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -164,7 +161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            user.displayName ?? 'User',
+            user.displayName ?? s.userRole,
             style: const TextStyle(
                 fontSize: 20, fontWeight: FontWeight.w600),
           ),
@@ -178,13 +175,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
 
           // ── Info desde claims (no Firestore) ──────────────────────────
-          _infoRow(Icons.verified_user_outlined, 'Access', accessType,
+          _infoRow(Icons.verified_user_outlined, s.access, accessType,
               const Color(0xff721c80)),
           const SizedBox(height: 8),
-          _infoRow(Icons.badge_outlined, 'Roles', rolesText, Colors.grey),
+          _infoRow(Icons.badge_outlined, s.roles, rolesText, Colors.grey),
           const SizedBox(height: 8),
           _infoRow(
-              Icons.work_outline, 'Worker ID', workerId, Colors.grey),
+              Icons.work_outline, s.workerId, workerId, Colors.grey),
+
+          // ── Worker stats ─────────────────────────────────────────────
+          if (userProvider.isWorker && workerId != '—')
+            _buildWorkerStats(workerId),
 
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -197,8 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             onPressed: _handleSignOut,
             icon: const Icon(Icons.logout, color: Colors.white),
-            label: const Text('Sign out',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
+            label: Text(s.logout, style: const TextStyle(color: Colors.white, fontSize: 16)),
           ),
         ],
       ),
@@ -223,4 +223,168 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
+
+  // ── Worker stats section ──────────────────────────────────────────────────────
+  Widget _buildWorkerStats(String workerId) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadWorkerStats(workerId),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator(color: Color(0xff721c80))),
+          );
+        }
+        final stats = snap.data!;
+        final total      = stats['total'] as int;
+        final revenue    = stats['revenue'] as double;
+        final byService  = stats['byService'] as Map<String, int>;
+
+        final s = S.of(context);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.bar_chart_rounded, color: Color(0xff721c80), size: 20),
+                const SizedBox(width: 8),
+                Text(s.myStats, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Summary row
+            Row(
+              children: [
+                _statChip(Icons.check_circle_outline, '$total', s.procedures, Colors.green),
+                const SizedBox(width: 10),
+                _statChip(Icons.euro_rounded, revenue.toStringAsFixed(0), s.revenue, const Color(0xff721c80)),
+              ],
+            ),
+            if (byService.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(s.byProcedure, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.black54)),
+              const SizedBox(height: 8),
+              ...(byService.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value)))
+                  .map((e) => _serviceRow(context, e.key, e.value)),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _loadWorkerStats(String workerId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('appointments')
+        .where('workerId', isEqualTo: workerId)
+        .where('status', whereIn: ['done', 'scheduled'])
+        .get();
+
+    final now = DateTime.now();
+    int total = 0;
+    double revenue = 0;
+    final byService = <String, int>{};
+
+    for (final doc in snap.docs) {
+      final data   = doc.data();
+      final status = (data['status'] ?? '').toString();
+      final ts     = data['appointmentDate'];
+      final isPast = ts is Timestamp && ts.toDate().isBefore(now);
+
+      // Count only done or past-scheduled (attended)
+      if (status == 'done' || (status == 'scheduled' && isPast)) {
+        total++;
+        // Revenue: finalPrice > total > basePrice
+        final fp  = data['finalPrice'];
+        final tot = data['total'];
+        final bp  = data['basePrice'];
+        final price = (fp is num)  ? fp.toDouble()
+                    : (tot is num) ? tot.toDouble()
+                    : (bp  is num) ? bp.toDouble()
+                    : 0.0;
+        revenue += price;
+
+        // Service label
+        final svcKey   = (data['serviceNameKey']   ?? '').toString().trim();
+        final svcLabel = (data['serviceName']       ?? '').toString().trim();
+        final key = svcKey.isNotEmpty ? svcKey : (svcLabel.isNotEmpty ? svcLabel : '—');
+        byService[key] = (byService[key] ?? 0) + 1;
+      }
+    }
+
+    return {'total': total, 'revenue': revenue, 'byService': byService};
+  }
+
+  Widget _statChip(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value,
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w900, color: color)),
+                Text(label,
+                    style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceRow(BuildContext context, String svcKey, int count) {
+    // Translate service key if possible
+    final label = svcKey.length < 20 && !svcKey.contains(' ')
+        ? _trySvcKey(context, svcKey)
+        : svcKey;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xff721c80).withOpacity(0.10),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text('$count',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    color: Color(0xff721c80))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _trySvcKey(BuildContext context, String key) {
+    try {
+      return trServiceOrAddon(context, key);
+    } catch (_) {
+      return key;
+    }
+  }
+
 }

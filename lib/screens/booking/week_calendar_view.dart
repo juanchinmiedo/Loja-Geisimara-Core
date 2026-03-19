@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 
 import 'package:salon_app/repositories/blocked_slot_repo.dart';
 import 'package:salon_app/screens/booking/block_slot_dialog.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/utils/date_labels.dart';
 import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
@@ -667,7 +668,8 @@ class _WeekHeaderRow extends StatelessWidget {
     final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final monthLabel = months(weekStartMonday.month);
+    final s = S.of(context);
+    final monthLabel = monthsL10n(weekStartMonday.month, s);
     final yearLabel  = weekStartMonday.year.toString();
 
     return Row(
@@ -720,7 +722,7 @@ class _WeekHeaderRow extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          week(d.weekday),
+                          weekL10n(d.weekday, s),
                           style: TextStyle(
                               fontSize: 10,
                               color: isPast

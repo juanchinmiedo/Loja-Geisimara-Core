@@ -2514,6 +2514,216 @@ class S {
       args: [],
     );
   }
+
+  /// `Solicitadas`
+  String get statRequested {
+    return Intl.message(
+      'Solicitadas',
+      name: 'statRequested',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Compareceu`
+  String get statAttended {
+    return Intl.message(
+      'Compareceu',
+      name: 'statAttended',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cancelado`
+  String get statCancelled {
+    return Intl.message(
+      'Cancelado',
+      name: 'statCancelled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Faltou`
+  String get statNoShow {
+    return Intl.message(
+      'Faltou',
+      name: 'statNoShow',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Última visita`
+  String get statLastAppt {
+    return Intl.message(
+      'Última visita',
+      name: 'statLastAppt',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Jan`
+  String get monthJan {
+    return Intl.message(
+      'Jan',
+      name: 'monthJan',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Fev`
+  String get monthFeb {
+    return Intl.message(
+      'Fev',
+      name: 'monthFeb',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mar`
+  String get monthMar {
+    return Intl.message(
+      'Mar',
+      name: 'monthMar',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Abr`
+  String get monthApr {
+    return Intl.message(
+      'Abr',
+      name: 'monthApr',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mai`
+  String get monthMay {
+    return Intl.message(
+      'Mai',
+      name: 'monthMay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Jun`
+  String get monthJun {
+    return Intl.message(
+      'Jun',
+      name: 'monthJun',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Jul`
+  String get monthJul {
+    return Intl.message(
+      'Jul',
+      name: 'monthJul',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Ago`
+  String get monthAug {
+    return Intl.message(
+      'Ago',
+      name: 'monthAug',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Set`
+  String get monthSep {
+    return Intl.message(
+      'Set',
+      name: 'monthSep',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Out`
+  String get monthOct {
+    return Intl.message(
+      'Out',
+      name: 'monthOct',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nov`
+  String get monthNov {
+    return Intl.message(
+      'Nov',
+      name: 'monthNov',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dez`
+  String get monthDec {
+    return Intl.message(
+      'Dez',
+      name: 'monthDec',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `As minhas stats`
+  String get myStats {
+    return Intl.message(
+      'As minhas stats',
+      name: 'myStats',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Por procedimento`
+  String get byProcedure {
+    return Intl.message(
+      'Por procedimento',
+      name: 'byProcedure',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `procedimentos`
+  String get procedures {
+    return Intl.message(
+      'procedimentos',
+      name: 'procedures',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `receita`
+  String get revenue {
+    return Intl.message(
+      'receita',
+      name: 'revenue',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

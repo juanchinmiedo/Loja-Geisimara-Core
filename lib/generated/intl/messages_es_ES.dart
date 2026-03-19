@@ -99,6 +99,8 @@ class MessageLookup extends MessageLookupByLibrary {
         "bookingTab": MessageLookupByLibrary.simpleMessage("Reservas"),
         "bottom_navigationbar": MessageLookupByLibrary.simpleMessage(
             "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente"),
+        "byProcedure":
+            MessageLookupByLibrary.simpleMessage("Por procedimiento"),
         "cancel": MessageLookupByLibrary.simpleMessage("Cancelar"),
         "category": MessageLookupByLibrary.simpleMessage("Categoría"),
         "checking": MessageLookupByLibrary.simpleMessage("Verificando…"),
@@ -234,8 +236,21 @@ class MessageLookup extends MessageLookupByLibrary {
         "modeLooking": MessageLookupByLibrary.simpleMessage("Buscando"),
         "modeNew": MessageLookupByLibrary.simpleMessage("Nuevo"),
         "modeNoShow": MessageLookupByLibrary.simpleMessage("No vino"),
+        "monthApr": MessageLookupByLibrary.simpleMessage("Abr"),
+        "monthAug": MessageLookupByLibrary.simpleMessage("Ago"),
+        "monthDec": MessageLookupByLibrary.simpleMessage("Dic"),
+        "monthFeb": MessageLookupByLibrary.simpleMessage("Feb"),
+        "monthJan": MessageLookupByLibrary.simpleMessage("Ene"),
+        "monthJul": MessageLookupByLibrary.simpleMessage("Jul"),
+        "monthJun": MessageLookupByLibrary.simpleMessage("Jun"),
+        "monthMar": MessageLookupByLibrary.simpleMessage("Mar"),
+        "monthMay": MessageLookupByLibrary.simpleMessage("May"),
+        "monthNov": MessageLookupByLibrary.simpleMessage("Nov"),
+        "monthOct": MessageLookupByLibrary.simpleMessage("Oct"),
+        "monthSep": MessageLookupByLibrary.simpleMessage("Sep"),
         "mostCommonBadge": MessageLookupByLibrary.simpleMessage("Más común"),
         "myError": MessageLookupByLibrary.simpleMessage("Mi error"),
+        "myStats": MessageLookupByLibrary.simpleMessage("Mis estadísticas"),
         "nailDecorations": MessageLookupByLibrary.simpleMessage("Decoraciones"),
         "nailRecomposition":
             MessageLookupByLibrary.simpleMessage("Recomposición de Uñas"),
@@ -308,6 +323,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "procedureLabel": MessageLookupByLibrary.simpleMessage("Procedimiento"),
         "procedureRequired": MessageLookupByLibrary.simpleMessage(
             "El procedimiento es obligatorio"),
+        "procedures": MessageLookupByLibrary.simpleMessage("procedimientos"),
         "profileTab": MessageLookupByLibrary.simpleMessage("Perfil"),
         "rangeMustBeAtLeast": m7,
         "ranges": MessageLookupByLibrary.simpleMessage("Intervalos"),
@@ -327,6 +343,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "reservationPending": MessageLookupByLibrary.simpleMessage(
             "Reserva (confirmación pendiente)"),
         "results": MessageLookupByLibrary.simpleMessage("Resultados"),
+        "revenue": MessageLookupByLibrary.simpleMessage("ingresos"),
         "roles": MessageLookupByLibrary.simpleMessage("Roles"),
         "save": MessageLookupByLibrary.simpleMessage("Guardar"),
         "saveClient": MessageLookupByLibrary.simpleMessage("Guardar cliente"),
@@ -361,6 +378,11 @@ class MessageLookup extends MessageLookupByLibrary {
         "start": MessageLookupByLibrary.simpleMessage("Comenzar"),
         "startAdminMode":
             MessageLookupByLibrary.simpleMessage("Iniciar modo admin"),
+        "statAttended": MessageLookupByLibrary.simpleMessage("Asistió"),
+        "statCancelled": MessageLookupByLibrary.simpleMessage("Cancelada"),
+        "statLastAppt": MessageLookupByLibrary.simpleMessage("Última visita"),
+        "statNoShow": MessageLookupByLibrary.simpleMessage("No se presentó"),
+        "statRequested": MessageLookupByLibrary.simpleMessage("Solicitadas"),
         "statusAttended": MessageLookupByLibrary.simpleMessage("Asistió"),
         "statusCancelled": MessageLookupByLibrary.simpleMessage("Cancelada"),
         "statusDone": MessageLookupByLibrary.simpleMessage("Realizada"),

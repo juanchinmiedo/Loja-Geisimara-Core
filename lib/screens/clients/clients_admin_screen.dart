@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/generated/l10n.dart';
-import 'package:salon_app/widgets/language_pill.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
@@ -185,9 +184,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
         .limit(100)
         .snapshots();
 
-    return Stack(
-      children: [
-      Scaffold(
+    return Scaffold(
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (_, snap) {
@@ -341,14 +338,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
           );
         },
       ),
-    ),
-      // Language pill
-      Positioned(
-        top: MediaQuery.of(context).padding.top + 10,
-        right: 18,
-        child: const LanguagePill(),
-      ),
-    ]);
+    );
   }
 }
 

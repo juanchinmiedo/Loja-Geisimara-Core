@@ -17,7 +17,9 @@ class LanguagePill extends StatelessWidget {
     final locale  = context.watch<LocaleProvider>().locale;
     final current = locale.languageCode;
 
-    return Container(
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
@@ -48,6 +50,7 @@ class LanguagePill extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.none,
                   color: isActive
                       ? const Color(0xff721c80)
                       : Colors.white.withOpacity(0.80),
@@ -56,6 +59,7 @@ class LanguagePill extends StatelessWidget {
             ),
           );
         }).toList(),
+      ),
       ),
     );
   }
