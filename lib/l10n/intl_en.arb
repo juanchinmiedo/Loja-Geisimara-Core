@@ -1,8 +1,6 @@
 {
   "@@locale": "en",
-
   "console_firebase_database": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
-
   "gelA": "Gel Aplication",
   "acrylicA": "Acrylic Aplication",
   "fiberA": "Fiber Aplication",
@@ -18,56 +16,44 @@
   "nailDecorations": "Decorations",
   "unknown": "Unknown",
   "nailRecomposition": "Nail Recomposition",
-
   "bottom_navigationbar": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
-  
   "homeTab": "Home",
   "mapsTab": "Maps",
   "clientsTab": "Clients",
   "bookingTab": "Booking",
   "profileTab": "Profile",
-
   "_carrousel_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "bookNowButton": "Book Now",
   "bookNowTitle": "Schedule Appointment",
   "bookNowSubtitle": "Schedule your appointment in a few seconds",
-
   "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "title": "Geisimara Nail Designer",
   "intro": "Manicure, Pedicure and Eyebrows and Eyelashes Design",
   "start": "Get Started",
-
   "continueWithGoogle": "Continue with Google",
   "startAdminMode": "Start admin mode",
   "adminModeEnabled": "Admin mode enabled",
-
   "continueAsGuest": "Continue as guest",
   "logout": "Sign out",
   "language": "Language",
-
   "category": "Category",
   "hands": "hands",
   "feet": "feet",
   "services": "services",
-
   "openUrlError": "Could not open {url}",
   "@openUrlError": {
     "description": "Generic error when opening a URL",
     "placeholders": {
-      "url": { "type": "String" }
+      "url": {
+        "type": "String"
+      }
     }
   },
-
   "noServicesFound": "No services found",
   "noSpecialistsFound": "No specialists found",
-
   "googleLoginSuccess": "Google login successful",
   "guest": "Guest",
-
   "_all_services/workers/worker_detail_screenns": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "tabInfo": "Info",
   "tabPortfolio": "Portfolio",
   "aboutMe": "About me",
@@ -78,80 +64,66 @@
   "errorLoadingServices": "Error loading services",
   "priceOnRequest": "Price on request",
   "viewProfileAndCatalog": "View profile & catalog",
-
   "_booking_admin_dialogs": "Texts used in create/edit appointment dialogs",
-
   "createAppointmentTitle": "Create appointment",
   "editAppointmentTitle": "Edit appointment",
-
   "modeExisting": "Existing",
   "modeNew": "New",
-
   "searchClientLabel": "Search (name / phone / instagram)",
   "noMatches": "No matches",
-
   "firstNameLabel": "First name",
   "lastNameLabel": "Last name",
   "countryLabel": "Country",
   "phoneLabel": "Phone",
   "instagramOptionalLabel": "Instagram (optional)",
-
   "firstNameRequired": "First name is required",
   "lastNameRequired": "Last name is required",
-
   "procedureLabel": "Procedure",
   "procedureRequired": "Procedure is required",
-
   "typeLabel": "Type",
   "typeRequired": "Type is required",
   "mostCommonBadge": "Most common",
-
   "selectTimePlaceholder": "Select time",
   "timeRequired": "Time is required",
-
   "priceLabel": "Price: €{value}",
   "@priceLabel": {
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
-
   "timeMinutesLabel": "Time: {minutes}m",
   "@timeMinutesLabel": {
     "placeholders": {
-      "minutes": { "type": "int" }
+      "minutes": {
+        "type": "int"
+      }
     }
   },
-
   "timeMinutesEmpty": "Time: —",
-
   "selectExistingClient": "Select an existing client",
   "phoneOrInstagramRequired": "Phone or Instagram is required",
-
   "appointmentCreated": "Appointment created",
   "appointmentUpdated": "Appointment updated",
   "appointmentDeleted": "Appointment deleted",
-
   "deleteAppointmentTitle": "Delete appointment?",
   "deleteAppointmentBody": "This action cannot be undone.",
-
   "delete": "Delete",
   "no": "No",
   "save": "Save",
   "create": "Create",
-
   "errorWithValue": "Error: {value}",
   "@errorWithValue": {
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
-
   "clientFallback": "Client",
   "serviceFallback": "Service",
-
   "_app_common": "Common app strings",
-
   "appTitle": "Nails Studio",
   "schedule": "Schedule",
   "price": "Price: {price}",
@@ -159,10 +131,165 @@
   "confirmBooking": "Confirm booking",
   "cancel": "Cancel",
   "successBooking": "Your appointment is confirmed!",
-
   "selectProcedurePlaceholder": "Select Procedure",
   "selectProcedureHelper": "Please select a procedure",
   "pickProcedureTitle": "Pick a Procedure",
   "selectTypePlaceholder": "Select Type",
-  "pickTypeTitle": "Pick a Type"
+  "pickTypeTitle": "Pick a Type",
+  "tapToViewProfile": "Tap to view profile",
+  "upcomingAppointments": "Upcoming appointments",
+  "noUpcomingAppointments": "No upcoming appointments",
+  "noPastAppointments": "No past appointments",
+  "activeBookingRequests": "Active booking requests",
+  "newAppointment": "New appointment",
+  "newBookingRequest": "New booking request",
+  "editClient": "Edit client",
+  "editRequest": "Edit request",
+  "saveClient": "Save client",
+  "requestUpdated": "Request updated",
+  "lostClients": "Lost clients",
+  "clientsNoVisitRecently": "Clients who haven't visited recently",
+  "atRiskClients": "At risk (30–45d)",
+  "lostClientsTab": "Lost (45d+)",
+  "noAtRiskClients": "No at-risk clients right now",
+  "noLostClients": "No lost clients right now",
+  "deleteClientTitle": "Delete client?",
+  "deleteRequestTitle": "Delete request?",
+  "bookingRequest": "Booking request",
+  "lookingForAppointment": "Looking for appointment",
+  "notLooking": "Not looking",
+  "adminHome": "Admin Home",
+  "subtitleLooking": "Clients looking for appointments",
+  "subtitleCancelled": "Most cancellations (then most attended)",
+  "subtitleNoShow": "Most no-shows (then most attended)",
+  "modeLooking": "Looking",
+  "modeCancelled": "Cancelled",
+  "modeNoShow": "No-show",
+  "lostClientsButton": "Lost clients  (30d+ / 45d+)",
+  "results": "Results",
+  "noActiveBookingRequests": "No active booking requests right now.",
+  "noClientsMatchFilter": "No clients match this filter.",
+  "attended": "Attended",
+  "lastVisit": "Last visit",
+  "createClient": "Create client",
+  "clientCreated": "Client created",
+  "phoneOrInstagramRequiredMsg": "Phone or Instagram required",
+  "required": "Required",
+  "countryCode": "Country code",
+  "searchHint": "Search",
+  "weekdayMon": "Mon",
+  "weekdayTue": "Tue",
+  "weekdayWed": "Wed",
+  "weekdayThu": "Thu",
+  "weekdayFri": "Fri",
+  "weekdaySat": "Sat",
+  "weekdaySun": "Sun",
+  "clientUpdated": "Client updated",
+  "clientDeleted": "Client deleted",
+  "deleteClientConfirm": "This will delete the client document. Continue?",
+  "bookingRequestCreated": "Booking request created",
+  "disableBookingRequests": "Disable booking requests?",
+  "disableBookingConfirmNone": "Disable 'Looking for appointment'. Continue?",
+  "disableBookingConfirmMany": "Delete all {count} active requests and disable?",
+  "@disableBookingConfirmMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectProcedureFirst": "Select a procedure first",
+  "instagram": "Instagram",
+  "upcoming": "Upcoming",
+  "past": "Past",
+  "confirm": "Confirm",
+  "deleteClient": "Delete client",
+  "deleteRequest": "Delete request",
+  "rangeMustBeAtLeast": "Range must be at least {dur} min",
+  "@rangeMustBeAtLeast": {
+    "placeholders": {
+      "dur": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSchedule": "Admin Schedule",
+  "appointments": "Appointments",
+  "noAppointmentsForDay": "No appointments for this day",
+  "pendingConfirmation": "Pending confirmation",
+  "add": "Add",
+  "servicesStillLoading": "Services are still loading...",
+  "blockThisTime": "Block this time",
+  "addNewBlock": "Add new block",
+  "existingBlocks": "Existing blocks",
+  "removeBlock": "Remove block?",
+  "remove": "Remove",
+  "from": "From",
+  "none": "None",
+  "endMustBeAfterStart": "End must be after start",
+  "reasonOptional": "Reason (optional)",
+  "blockTimeDateLabel": "Block time – {date}",
+  "@blockTimeDateLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "any": "Any",
+  "anyTime": "Any time",
+  "clientCancelledAppointment": "Client cancelled the appointment",
+  "clientDidNotAttend": "Client did not attend",
+  "noShow": "No show",
+  "myError": "My error",
+  "removeAppointment": "Remove appointment",
+  "removePermanently": "Remove permanently (wrong booking)",
+  "deletedPermanently": "Deleted permanently",
+  "markedAsConfirmed": "Marked as confirmed appointment.",
+  "markedAsReservation": "Marked as reservation: pending client confirmation.",
+  "markedAsNoShow": "Marked as no-show",
+  "deleteBookingRequests": "Delete booking request(s)?",
+  "keep": "Keep",
+  "request": "Request",
+  "duplicateName": "Duplicate name",
+  "invalidFinalPrice": "Invalid final price",
+  "finalPriceOptional": "Final price (optional)",
+  "checking": "Checking…",
+  "noAvailability": "No availability",
+  "deleteRequestConfirm": "This will delete this booking request.",
+  "worker": "Worker",
+  "createRequest": "Create request",
+  "addDay": "Add day",
+  "days": "Days",
+  "ranges": "Ranges",
+  "addRange": "+ Add range",
+  "pickPreferredDay": "Pick preferred day",
+  "pickStartTime": "Pick start time",
+  "pickEndTime": "Pick end time",
+  "tipAddDays": "Tip: add one or more days, and optionally time ranges.",
+  "viewDay": "Day",
+  "viewWeek": "Week",
+  "all": "All",
+  "notifications": "Notifications",
+  "noNotifications": "No notifications.",
+  "tapToOpenClient": "Tap to open client",
+  "dismiss": "Dismiss",
+  "close": "Close",
+  "pendingConfirmationLabel": "PENDING",
+  "pendingConfirmationMsg": "Client still needs to confirm this time.",
+  "timeIsConfirmed": "Time is confirmed.",
+  "reservationPending": "Reservation (pending confirmation)",
+  "seeking": "Seeking",
+  "searchEllipsis": "Search...",
+  "roles": "Roles",
+  "noRolesAssigned": "No roles assigned",
+  "adminRole": "Admin",
+  "adminWorkerRole": "Admin + Worker",
+  "userRole": "User",
+  "workerRole": "Worker",
+  "workerId": "Worker ID",
+  "access": "Access",
+  "noAccess": "No access",
+  "signInToManage": "Sign in to manage your appointments",
+  "markedAsCancelled": "Marked as cancelled"
 }

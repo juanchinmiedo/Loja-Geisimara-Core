@@ -58,14 +58,15 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   // Se llama una vez cuando el StreamBuilder recibe datos nuevos.
   // El cache evita repetir la query en rebuilds posteriores.
 
-  String _formatApptLabel(DateTime dt) {
-    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '\${wd[(dt.weekday - 1).clamp(0, 6)]} '
-        '\${DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(dt))} · '
-        '\${DateTimeUtils.hhmmFromMinutes(dt.hour * 60 + dt.minute)}';
+  String _formatApptLabel(DateTime dt, S s) {
+    final wd = [s.weekdayMon, s.weekdayTue, s.weekdayWed, s.weekdayThu,
+                s.weekdayFri, s.weekdaySat, s.weekdaySun];
+    return '${wd[(dt.weekday - 1).clamp(0, 6)]} '
+        '${DateTimeUtils.formatYyyyMmDdToDdMmYyyy(DateTimeUtils.yyyymmdd(dt))} · '
+        '${DateTimeUtils.hhmmFromMinutes(dt.hour * 60 + dt.minute)}';
   }
 
-  Future<void> _prefetchNextAppts(List<String> clientIds) async {
+  Future<void> _prefetchNextAppts(List<String> clientIds, S s) async {
     // Solo los IDs que no están en cache todavía
     final missing = clientIds
         .where((id) => !_prefetchedIds.contains(id))
@@ -107,7 +108,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
         // Poblar cache
         for (final id in chunk) {
           if (earliest.containsKey(id)) {
-            _nextApptCache[id] = _formatApptLabel(earliest[id]!);
+            _nextApptCache[id] = _formatApptLabel(earliest[id]!, s);
           } else {
             _nextApptCache[id] = '';
           }
@@ -195,7 +196,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
           // unawaited — no bloquea el build. El setState() dentro de
           // _prefetchNextAppts actualiza las pills cuando llegan los datos.
           final idsToFetch = filtered.map((d) => d.id).toList();
-          Future.microtask(() => _prefetchNextAppts(idsToFetch));
+          Future.microtask(() => _prefetchNextAppts(idsToFetch, s));
 
           // CustomScrollView: header fijo + lista virtualizada (solo renderiza
           // los items visibles en pantalla, no los 100 de golpe)
@@ -204,8 +205,8 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
               // Header con search bar
               SliverToBoxAdapter(
                 child: AppGradientHeader(
-                  title: 'Clients',
-                  subtitle: 'Search by name / phone / instagram',
+                  title: s.clientsTab,
+                  subtitle: s.searchClientLabel,
                   child: Row(
                     children: [
                       Expanded(
@@ -216,7 +217,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.95),
                             prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search',
+                            hintText: s.searchHint,
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             contentPadding: const EdgeInsets.symmetric(
@@ -357,12 +358,13 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Expanded(child: Text('Create client',
-              style: TextStyle(fontWeight: FontWeight.w900))),
+          Expanded(child: Text(s.createClient,
+              style: const TextStyle(fontWeight: FontWeight.w900))),
           IconButton(
               onPressed: _saving ? null : () => Navigator.pop(context),
               icon: const Icon(Icons.close)),
@@ -375,37 +377,37 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(controller: _fnCtrl,
-                  decoration: const InputDecoration(labelText: 'First name',
-                      border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: s.firstNameLabel,
+                      border: const OutlineInputBorder()),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Required' : null),
+                      ? s.required : null),
               const SizedBox(height: 10),
               TextFormField(controller: _lnCtrl,
-                  decoration: const InputDecoration(labelText: 'Last name',
-                      border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: s.lastNameLabel,
+                      border: const OutlineInputBorder()),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Required' : null),
+                      ? s.required : null),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(flex: 2, child: TextFormField(
                     controller: _countryCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Country code',
-                        border: OutlineInputBorder()))),
+                    decoration: InputDecoration(labelText: s.countryCode,
+                        border: const OutlineInputBorder()))),
                 const SizedBox(width: 10),
                 Expanded(flex: 4, child: TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Phone',
-                        border: OutlineInputBorder()))),
+                    decoration: InputDecoration(labelText: s.phoneLabel,
+                        border: const OutlineInputBorder()))),
               ]),
               const SizedBox(height: 10),
               TextFormField(controller: _igCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Instagram (optional)',
-                      border: OutlineInputBorder())),
+                  decoration: InputDecoration(
+                      labelText: s.instagramOptionalLabel,
+                      border: const OutlineInputBorder())),
               const SizedBox(height: 10),
-              Text('Phone OR Instagram required',
+              Text(s.phoneOrInstagramRequiredMsg,
                   style: TextStyle(color: Colors.grey[700], fontSize: 12)),
             ],
           ),
@@ -428,7 +430,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
               final ig   = widget.clientService.normalizeInstagram(_igCtrl.text);
               if (ctry == 0 && ph == 0 && ig.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Phone or Instagram required')));
+                  SnackBar(content: Text(s.phoneOrInstagramRequiredMsg)));
                 return;
               }
               setState(() => _saving = true);
@@ -443,7 +445,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 if (!mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Client created')));
+                    SnackBar(content: Text(s.clientCreated)));
               } finally {
                 if (mounted) setState(() => _saving = false);
               }
@@ -452,7 +454,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Text('Create', style: TextStyle(
+                : Text(s.create, style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w900)),
           ),
         ),

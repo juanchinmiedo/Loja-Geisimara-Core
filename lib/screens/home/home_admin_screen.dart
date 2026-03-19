@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/provider/user_provider.dart';
 
@@ -12,7 +13,6 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
 
 import 'package:salon_app/screens/home/lost_clients_screen.dart';
-
 import 'package:salon_app/screens/clients/clients_profile_screen.dart';
 import 'package:salon_app/widgets/admin_notifications_overlay.dart';
 
@@ -89,11 +89,11 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     }
   }
 
-  String _subtitle() {
+  String _subtitle(S s) {
     switch (mode) {
-      case HomeAdminMode.looking:   return 'Clients looking for appointments';
-      case HomeAdminMode.cancelled: return 'Most cancellations (then most attended)';
-      case HomeAdminMode.noShow:    return 'Most no-shows (then most attended)';
+      case HomeAdminMode.looking:   return s.subtitleLooking;
+      case HomeAdminMode.cancelled: return s.subtitleCancelled;
+      case HomeAdminMode.noShow:    return s.subtitleNoShow;
     }
   }
 
@@ -113,7 +113,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     }
   }
 
-  Widget _modeButtons(bool isAdmin) {
+  Widget _modeButtons(bool isAdmin, S s) {
     const purple = Color(0xff721c80);
 
     Widget pill({
@@ -169,7 +169,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               active: mode == HomeAdminMode.looking,
               onTap: () => _setMode(HomeAdminMode.looking),
               icon: Icons.notifications_active_outlined,
-              label: 'Looking',
+              label: s.modeLooking,
               tint: purple,
               iconColor: purple,
             ),
@@ -178,7 +178,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               active: mode == HomeAdminMode.cancelled,
               onTap: () => _setMode(HomeAdminMode.cancelled),
               icon: Icons.event_busy_rounded,
-              label: 'Cancelled',
+              label: s.modeCancelled,
               tint: Colors.orange,
               iconColor: Colors.orange[800] ?? Colors.orange,
             ),
@@ -187,7 +187,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               active: mode == HomeAdminMode.noShow,
               onTap: () => _setMode(HomeAdminMode.noShow),
               icon: Icons.person_off_rounded,
-              label: 'No-show',
+              label: s.modeNoShow,
               tint: Colors.redAccent,
               iconColor: Colors.redAccent,
             ),
@@ -216,7 +216,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     Icon(Icons.people_alt_outlined, size: 18, color: Colors.brown[600]),
                     const SizedBox(width: 8),
                     Text(
-                      'Lost clients  (30d+ / 45d+)',
+                      s.lostClientsButton,
                       style: TextStyle(fontWeight: FontWeight.w900, color: Colors.brown[700]),
                     ),
                     const SizedBox(width: 6),
@@ -241,6 +241,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s       = S.of(context);
     final stream  = _modeStream ?? _queryForMode().snapshots();
     final isAdmin = context.watch<UserProvider>().isAdmin;
     final bottomPanelH = isAdmin ? 140.0 : 92.0;
@@ -255,8 +256,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               child: Column(
                 children: [
                   AppGradientHeader(
-                    title: 'Admin Home',
-                    subtitle: _subtitle(),
+                    title: s.adminHome,
+                    subtitle: _subtitle(s),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -274,11 +275,11 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                         final docs = snap.data?.docs ?? [];
                         if (docs.isEmpty) {
                           return AppSectionCard(
-                            title: 'Results',
+                            title: s.results,
                             child: Text(
                               mode == HomeAdminMode.looking
-                                  ? 'No active booking requests right now.'
-                                  : 'No clients match this filter.',
+                                  ? s.noActiveBookingRequests
+                                  : s.noClientsMatchFilter,
                               style: TextStyle(color: Colors.grey[700]),
                             ),
                           );
@@ -339,9 +340,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                                             style: TextStyle(color: Colors.grey[700])),
                                       const SizedBox(height: 6),
                                       if (mode == HomeAdminMode.looking)
-                                        const Text('Tap to view profile')
+                                        Text(s.tapToViewProfile)
                                       else
-                                        Text('Attended: $attended',
+                                        Text('${s.attended}: $attended',
                                             style: TextStyle(color: Colors.grey[700])),
                                     ],
                                   ),
@@ -447,7 +448,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                     ),
                   ],
                 ),
-                child: _modeButtons(isAdmin),
+                child: _modeButtons(isAdmin, s),
               ),
             ),
           ),

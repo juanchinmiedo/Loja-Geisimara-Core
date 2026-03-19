@@ -1,18 +1,11 @@
-// lib/screens/clients/lost_clients_screen.dart
-//
-// Lista de clientes que llevan más de 30 días sin venir.
-// Tab 1: At risk  (30–45 días)  → naranja
-// Tab 2: Lost     (45d+)        → rojo
-//
-// Solo accesible para admin (el botón en home solo aparece a admins).
-// Requiere stats.lastAppointmentAt (Timestamp) en docs de clients —
-// lo escribe AppointmentService.onAppointmentCreated() automáticamente.
+// lib/screens/home/lost_clients_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:salon_app/components/client_card.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/screens/clients/clients_profile_screen.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 
@@ -41,12 +34,13 @@ class _LostClientsScreenState extends State<LostClientsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return Scaffold(
       body: Column(
         children: [
           AppGradientHeader(
-            title: 'Lost clients',
-            subtitle: "Clients who haven't visited recently",
+            title: s.lostClients,
+            subtitle: s.clientsNoVisitRecently,
           ),
           Material(
             color: Colors.white,
@@ -55,18 +49,18 @@ class _LostClientsScreenState extends State<LostClientsScreen>
               labelColor: const Color(0xff721c80),
               unselectedLabelColor: Colors.grey,
               indicatorColor: const Color(0xff721c80),
-              tabs: const [
+              tabs: [
                 Tab(
                   child: _TabLabel(
                     icon: Icons.warning_amber_rounded,
-                    label: 'At risk (30–45d)',
+                    label: s.atRiskClients,
                     color: Colors.orange,
                   ),
                 ),
                 Tab(
                   child: _TabLabel(
                     icon: Icons.person_off_outlined,
-                    label: 'Lost (45d+)',
+                    label: s.lostClientsTab,
                     color: Colors.red,
                   ),
                 ),
@@ -80,13 +74,13 @@ class _LostClientsScreenState extends State<LostClientsScreen>
                 _ClientBucketList(
                   minDays: 30,
                   maxDays: 45,
-                  emptyMessage: 'No at-risk clients right now 🎉',
+                  emptyMessage: '${s.noAtRiskClients} 🎉',
                   accentColor: Colors.orange,
                 ),
                 _ClientBucketList(
                   minDays: 45,
                   maxDays: null,
-                  emptyMessage: 'No lost clients right now 🎉',
+                  emptyMessage: '${s.noLostClients} 🎉',
                   accentColor: Colors.red,
                 ),
               ],
@@ -114,8 +108,8 @@ class _ClientBucketList extends StatelessWidget {
   final Color accentColor;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _stream() {
-    final now        = DateTime.now();
-    final cutoffMax  = Timestamp.fromDate(now.subtract(Duration(days: minDays)));
+    final now       = DateTime.now();
+    final cutoffMax = Timestamp.fromDate(now.subtract(Duration(days: minDays)));
 
     var q = FirebaseFirestore.instance
         .collection('clients')
@@ -144,6 +138,7 @@ class _ClientBucketList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _stream(),
       builder: (ctx, snap) {
@@ -184,9 +179,9 @@ class _ClientBucketList extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           itemCount: docs.length,
           itemBuilder: (_, i) {
-            final doc     = docs[i];
-            final data    = doc.data();
-            final lastTs  = data['stats']?['lastAppointmentAt'] as Timestamp?;
+            final doc    = docs[i];
+            final data   = doc.data();
+            final lastTs = data['stats']?['lastAppointmentAt'] as Timestamp?;
             final summary =
                 (data['stats']?['lastAppointmentSummary'] ?? '').toString();
 
@@ -216,7 +211,7 @@ class _ClientBucketList extends StatelessWidget {
                       padding: const EdgeInsets.only(
                           left: 12, top: 3, bottom: 2),
                       child: Text(
-                        'Last visit: ${_formatDate(lastTs)}'
+                        '${s.lastVisit}: ${_formatDate(lastTs)}'
                         '${summary.isNotEmpty ? "  ·  $summary" : ""}',
                         style: TextStyle(
                             fontSize: 11, color: Colors.grey[600]),

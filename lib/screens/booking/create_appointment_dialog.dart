@@ -490,8 +490,8 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                       _unfocus();
                       setState(() => pendingConfirmation = value);
                       final msg = value
-                          ? 'Marked as reservation: pending client confirmation.'
-                          : 'Marked as confirmed appointment.';
+                          ? s.markedAsReservation
+                          : s.markedAsConfirmed;
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
                     },
                   ),
@@ -949,7 +949,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
 
                           final svcNameKey = (selectedServiceData?['name'] ?? '').toString();
                           final translatedName =
-                              svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : 'Service';
+                              svcNameKey.isNotEmpty ? trServiceOrAddon(context, svcNameKey) : s.serviceFallback;
 
                           final typeLabel = (selectedType?['label'] ?? '').toString();
                           final typeExtraPrice = (selectedType?['extraPrice'] is num)
@@ -1028,7 +1028,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                             if (plan.confirmDelete.isNotEmpty && mounted) {
                               String rangeLabelFrom(Map<String, dynamic> br) {
                                 final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-                                if (ranges.isEmpty) return 'Any time';
+                                if (ranges.isEmpty) return s.anyTime;
                                 final parts = <String>[];
                                 for (final rr in ranges) {
                                   if (rr is! Map) continue;
@@ -1056,7 +1056,7 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                                     context: context,
                                     builder: (dctx) {
                                       return AlertDialog(
-                                        title: const Text('Delete booking request(s)?'),
+                                        title: Text(s.deleteBookingRequests),
                                         content: SizedBox(
                                           width: double.maxFinite,
                                           child: ListView.separated(
@@ -1071,12 +1071,12 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                                                       '')
                                                   .toString();
                                               final w = (br['workerId'] ?? '').toString();
-                                              final workerLabel = w.trim().isEmpty ? 'Any' : w;
+                                              final workerLabel = w.trim().isEmpty ? s.any : w;
                                               return Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    proc.isEmpty ? 'Request' : proc,
+                                                    proc.isEmpty ? s.request : proc,
                                                     style: const TextStyle(fontWeight: FontWeight.w900),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -1091,12 +1091,12 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(dctx, false),
-                                            child: const Text('Keep'),
+                                            child: Text(s.keep),
                                           ),
                                           ElevatedButton(
                                             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                             onPressed: () => Navigator.pop(dctx, true),
-                                            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                            child: Text(s.delete, style: const TextStyle(color: Colors.white)),
                                           ),
                                         ],
                                       );

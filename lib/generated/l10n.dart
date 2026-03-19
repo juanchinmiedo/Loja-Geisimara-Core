@@ -1114,6 +1114,1356 @@ class S {
       args: [],
     );
   }
+
+  /// `Ver perfil`
+  String get tapToViewProfile {
+    return Intl.message(
+      'Ver perfil',
+      name: 'tapToViewProfile',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Próximas marcações`
+  String get upcomingAppointments {
+    return Intl.message(
+      'Próximas marcações',
+      name: 'upcomingAppointments',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem próximas marcações`
+  String get noUpcomingAppointments {
+    return Intl.message(
+      'Sem próximas marcações',
+      name: 'noUpcomingAppointments',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem marcações passadas`
+  String get noPastAppointments {
+    return Intl.message(
+      'Sem marcações passadas',
+      name: 'noPastAppointments',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pedidos de marcação ativos`
+  String get activeBookingRequests {
+    return Intl.message(
+      'Pedidos de marcação ativos',
+      name: 'activeBookingRequests',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nova marcação`
+  String get newAppointment {
+    return Intl.message(
+      'Nova marcação',
+      name: 'newAppointment',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Novo pedido de marcação`
+  String get newBookingRequest {
+    return Intl.message(
+      'Novo pedido de marcação',
+      name: 'newBookingRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Editar cliente`
+  String get editClient {
+    return Intl.message(
+      'Editar cliente',
+      name: 'editClient',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Editar pedido`
+  String get editRequest {
+    return Intl.message(
+      'Editar pedido',
+      name: 'editRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Guardar cliente`
+  String get saveClient {
+    return Intl.message(
+      'Guardar cliente',
+      name: 'saveClient',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pedido atualizado`
+  String get requestUpdated {
+    return Intl.message(
+      'Pedido atualizado',
+      name: 'requestUpdated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Clientes perdidos`
+  String get lostClients {
+    return Intl.message(
+      'Clientes perdidos',
+      name: 'lostClients',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Clientes sem visita recente`
+  String get clientsNoVisitRecently {
+    return Intl.message(
+      'Clientes sem visita recente',
+      name: 'clientsNoVisitRecently',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Em risco (30–45d)`
+  String get atRiskClients {
+    return Intl.message(
+      'Em risco (30–45d)',
+      name: 'atRiskClients',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Perdidos (45d+)`
+  String get lostClientsTab {
+    return Intl.message(
+      'Perdidos (45d+)',
+      name: 'lostClientsTab',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem clientes em risco agora`
+  String get noAtRiskClients {
+    return Intl.message(
+      'Sem clientes em risco agora',
+      name: 'noAtRiskClients',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem clientes perdidos agora`
+  String get noLostClients {
+    return Intl.message(
+      'Sem clientes perdidos agora',
+      name: 'noLostClients',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar cliente?`
+  String get deleteClientTitle {
+    return Intl.message(
+      'Eliminar cliente?',
+      name: 'deleteClientTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar pedido?`
+  String get deleteRequestTitle {
+    return Intl.message(
+      'Eliminar pedido?',
+      name: 'deleteRequestTitle',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pedido de marcação`
+  String get bookingRequest {
+    return Intl.message(
+      'Pedido de marcação',
+      name: 'bookingRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `À procura de marcação`
+  String get lookingForAppointment {
+    return Intl.message(
+      'À procura de marcação',
+      name: 'lookingForAppointment',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem procura activa`
+  String get notLooking {
+    return Intl.message(
+      'Sem procura activa',
+      name: 'notLooking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Início Admin`
+  String get adminHome {
+    return Intl.message(
+      'Início Admin',
+      name: 'adminHome',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Clientes à procura de marcação`
+  String get subtitleLooking {
+    return Intl.message(
+      'Clientes à procura de marcação',
+      name: 'subtitleLooking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mais cancelamentos (depois mais assistidos)`
+  String get subtitleCancelled {
+    return Intl.message(
+      'Mais cancelamentos (depois mais assistidos)',
+      name: 'subtitleCancelled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mais faltas (depois mais assistidos)`
+  String get subtitleNoShow {
+    return Intl.message(
+      'Mais faltas (depois mais assistidos)',
+      name: 'subtitleNoShow',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `À procura`
+  String get modeLooking {
+    return Intl.message(
+      'À procura',
+      name: 'modeLooking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cancelados`
+  String get modeCancelled {
+    return Intl.message(
+      'Cancelados',
+      name: 'modeCancelled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Faltou`
+  String get modeNoShow {
+    return Intl.message(
+      'Faltou',
+      name: 'modeNoShow',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Clientes perdidos  (30d+ / 45d+)`
+  String get lostClientsButton {
+    return Intl.message(
+      'Clientes perdidos  (30d+ / 45d+)',
+      name: 'lostClientsButton',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Resultados`
+  String get results {
+    return Intl.message(
+      'Resultados',
+      name: 'results',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem pedidos de marcação ativos agora.`
+  String get noActiveBookingRequests {
+    return Intl.message(
+      'Sem pedidos de marcação ativos agora.',
+      name: 'noActiveBookingRequests',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nenhum cliente corresponde ao filtro.`
+  String get noClientsMatchFilter {
+    return Intl.message(
+      'Nenhum cliente corresponde ao filtro.',
+      name: 'noClientsMatchFilter',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Compareceu`
+  String get attended {
+    return Intl.message(
+      'Compareceu',
+      name: 'attended',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Última visita`
+  String get lastVisit {
+    return Intl.message(
+      'Última visita',
+      name: 'lastVisit',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Criar cliente`
+  String get createClient {
+    return Intl.message(
+      'Criar cliente',
+      name: 'createClient',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cliente criado`
+  String get clientCreated {
+    return Intl.message(
+      'Cliente criado',
+      name: 'clientCreated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Telefone ou Instagram é obrigatório`
+  String get phoneOrInstagramRequiredMsg {
+    return Intl.message(
+      'Telefone ou Instagram é obrigatório',
+      name: 'phoneOrInstagramRequiredMsg',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Obrigatório`
+  String get required {
+    return Intl.message(
+      'Obrigatório',
+      name: 'required',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Código do país`
+  String get countryCode {
+    return Intl.message(
+      'Código do país',
+      name: 'countryCode',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pesquisar`
+  String get searchHint {
+    return Intl.message(
+      'Pesquisar',
+      name: 'searchHint',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Seg`
+  String get weekdayMon {
+    return Intl.message(
+      'Seg',
+      name: 'weekdayMon',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Ter`
+  String get weekdayTue {
+    return Intl.message(
+      'Ter',
+      name: 'weekdayTue',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Qua`
+  String get weekdayWed {
+    return Intl.message(
+      'Qua',
+      name: 'weekdayWed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Qui`
+  String get weekdayThu {
+    return Intl.message(
+      'Qui',
+      name: 'weekdayThu',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sex`
+  String get weekdayFri {
+    return Intl.message(
+      'Sex',
+      name: 'weekdayFri',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sáb`
+  String get weekdaySat {
+    return Intl.message(
+      'Sáb',
+      name: 'weekdaySat',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dom`
+  String get weekdaySun {
+    return Intl.message(
+      'Dom',
+      name: 'weekdaySun',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cliente atualizado`
+  String get clientUpdated {
+    return Intl.message(
+      'Cliente atualizado',
+      name: 'clientUpdated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cliente eliminado`
+  String get clientDeleted {
+    return Intl.message(
+      'Cliente eliminado',
+      name: 'clientDeleted',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Isto irá eliminar o cliente. Continuar?`
+  String get deleteClientConfirm {
+    return Intl.message(
+      'Isto irá eliminar o cliente. Continuar?',
+      name: 'deleteClientConfirm',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pedido de marcação criado`
+  String get bookingRequestCreated {
+    return Intl.message(
+      'Pedido de marcação criado',
+      name: 'bookingRequestCreated',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Desativar pedidos de marcação?`
+  String get disableBookingRequests {
+    return Intl.message(
+      'Desativar pedidos de marcação?',
+      name: 'disableBookingRequests',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Desativar 'À procura de marcação'. Continuar?`
+  String get disableBookingConfirmNone {
+    return Intl.message(
+      'Desativar \'À procura de marcação\'. Continuar?',
+      name: 'disableBookingConfirmNone',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar todos os {count} pedidos ativos e desativar?`
+  String disableBookingConfirmMany(int count) {
+    return Intl.message(
+      'Eliminar todos os $count pedidos ativos e desativar?',
+      name: 'disableBookingConfirmMany',
+      desc: '',
+      args: [count],
+    );
+  }
+
+  /// `Selecione primeiro um procedimento`
+  String get selectProcedureFirst {
+    return Intl.message(
+      'Selecione primeiro um procedimento',
+      name: 'selectProcedureFirst',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Instagram`
+  String get instagram {
+    return Intl.message(
+      'Instagram',
+      name: 'instagram',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Próximas`
+  String get upcoming {
+    return Intl.message(
+      'Próximas',
+      name: 'upcoming',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Passadas`
+  String get past {
+    return Intl.message(
+      'Passadas',
+      name: 'past',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Confirmar`
+  String get confirm {
+    return Intl.message(
+      'Confirmar',
+      name: 'confirm',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar cliente`
+  String get deleteClient {
+    return Intl.message(
+      'Eliminar cliente',
+      name: 'deleteClient',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar pedido`
+  String get deleteRequest {
+    return Intl.message(
+      'Eliminar pedido',
+      name: 'deleteRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `O intervalo deve ter pelo menos {dur} min`
+  String rangeMustBeAtLeast(int dur) {
+    return Intl.message(
+      'O intervalo deve ter pelo menos $dur min',
+      name: 'rangeMustBeAtLeast',
+      desc: '',
+      args: [dur],
+    );
+  }
+
+  /// `Agenda Admin`
+  String get adminSchedule {
+    return Intl.message(
+      'Agenda Admin',
+      name: 'adminSchedule',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Marcações`
+  String get appointments {
+    return Intl.message(
+      'Marcações',
+      name: 'appointments',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem marcações para este dia`
+  String get noAppointmentsForDay {
+    return Intl.message(
+      'Sem marcações para este dia',
+      name: 'noAppointmentsForDay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Confirmação pendente`
+  String get pendingConfirmation {
+    return Intl.message(
+      'Confirmação pendente',
+      name: 'pendingConfirmation',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Adicionar`
+  String get add {
+    return Intl.message(
+      'Adicionar',
+      name: 'add',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Os serviços ainda estão a carregar...`
+  String get servicesStillLoading {
+    return Intl.message(
+      'Os serviços ainda estão a carregar...',
+      name: 'servicesStillLoading',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Bloquear este horário`
+  String get blockThisTime {
+    return Intl.message(
+      'Bloquear este horário',
+      name: 'blockThisTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Adicionar novo bloqueio`
+  String get addNewBlock {
+    return Intl.message(
+      'Adicionar novo bloqueio',
+      name: 'addNewBlock',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Bloqueios existentes`
+  String get existingBlocks {
+    return Intl.message(
+      'Bloqueios existentes',
+      name: 'existingBlocks',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Remover bloqueio?`
+  String get removeBlock {
+    return Intl.message(
+      'Remover bloqueio?',
+      name: 'removeBlock',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Remover`
+  String get remove {
+    return Intl.message(
+      'Remover',
+      name: 'remove',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `De`
+  String get from {
+    return Intl.message(
+      'De',
+      name: 'from',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nenhum`
+  String get none {
+    return Intl.message(
+      'Nenhum',
+      name: 'none',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `O fim deve ser depois do início`
+  String get endMustBeAfterStart {
+    return Intl.message(
+      'O fim deve ser depois do início',
+      name: 'endMustBeAfterStart',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Motivo (opcional)`
+  String get reasonOptional {
+    return Intl.message(
+      'Motivo (opcional)',
+      name: 'reasonOptional',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Bloquear horário – {date}`
+  String blockTimeDateLabel(String date) {
+    return Intl.message(
+      'Bloquear horário – $date',
+      name: 'blockTimeDateLabel',
+      desc: '',
+      args: [date],
+    );
+  }
+
+  /// `Qualquer`
+  String get any {
+    return Intl.message(
+      'Qualquer',
+      name: 'any',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Qualquer hora`
+  String get anyTime {
+    return Intl.message(
+      'Qualquer hora',
+      name: 'anyTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cliente cancelou a marcação`
+  String get clientCancelledAppointment {
+    return Intl.message(
+      'Cliente cancelou a marcação',
+      name: 'clientCancelledAppointment',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cliente não compareceu`
+  String get clientDidNotAttend {
+    return Intl.message(
+      'Cliente não compareceu',
+      name: 'clientDidNotAttend',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Faltou`
+  String get noShow {
+    return Intl.message(
+      'Faltou',
+      name: 'noShow',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Erro meu`
+  String get myError {
+    return Intl.message(
+      'Erro meu',
+      name: 'myError',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Remover marcação`
+  String get removeAppointment {
+    return Intl.message(
+      'Remover marcação',
+      name: 'removeAppointment',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Remover permanentemente (reserva errada)`
+  String get removePermanently {
+    return Intl.message(
+      'Remover permanentemente (reserva errada)',
+      name: 'removePermanently',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminado permanentemente`
+  String get deletedPermanently {
+    return Intl.message(
+      'Eliminado permanentemente',
+      name: 'deletedPermanently',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Marcado como marcação confirmada.`
+  String get markedAsConfirmed {
+    return Intl.message(
+      'Marcado como marcação confirmada.',
+      name: 'markedAsConfirmed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Marcado como reserva: confirmação pendente.`
+  String get markedAsReservation {
+    return Intl.message(
+      'Marcado como reserva: confirmação pendente.',
+      name: 'markedAsReservation',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Marcado como faltou`
+  String get markedAsNoShow {
+    return Intl.message(
+      'Marcado como faltou',
+      name: 'markedAsNoShow',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Eliminar pedido(s) de marcação?`
+  String get deleteBookingRequests {
+    return Intl.message(
+      'Eliminar pedido(s) de marcação?',
+      name: 'deleteBookingRequests',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Manter`
+  String get keep {
+    return Intl.message(
+      'Manter',
+      name: 'keep',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pedido`
+  String get request {
+    return Intl.message(
+      'Pedido',
+      name: 'request',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nome duplicado`
+  String get duplicateName {
+    return Intl.message(
+      'Nome duplicado',
+      name: 'duplicateName',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Preço final inválido`
+  String get invalidFinalPrice {
+    return Intl.message(
+      'Preço final inválido',
+      name: 'invalidFinalPrice',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Preço final (opcional)`
+  String get finalPriceOptional {
+    return Intl.message(
+      'Preço final (opcional)',
+      name: 'finalPriceOptional',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `A verificar…`
+  String get checking {
+    return Intl.message(
+      'A verificar…',
+      name: 'checking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem disponibilidade`
+  String get noAvailability {
+    return Intl.message(
+      'Sem disponibilidade',
+      name: 'noAvailability',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Isto irá eliminar este pedido de marcação.`
+  String get deleteRequestConfirm {
+    return Intl.message(
+      'Isto irá eliminar este pedido de marcação.',
+      name: 'deleteRequestConfirm',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Trabalhadora`
+  String get worker {
+    return Intl.message(
+      'Trabalhadora',
+      name: 'worker',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Criar pedido`
+  String get createRequest {
+    return Intl.message(
+      'Criar pedido',
+      name: 'createRequest',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Adicionar dia`
+  String get addDay {
+    return Intl.message(
+      'Adicionar dia',
+      name: 'addDay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dias`
+  String get days {
+    return Intl.message(
+      'Dias',
+      name: 'days',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Intervalos`
+  String get ranges {
+    return Intl.message(
+      'Intervalos',
+      name: 'ranges',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `+ Adicionar intervalo`
+  String get addRange {
+    return Intl.message(
+      '+ Adicionar intervalo',
+      name: 'addRange',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Escolher dia preferido`
+  String get pickPreferredDay {
+    return Intl.message(
+      'Escolher dia preferido',
+      name: 'pickPreferredDay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Escolher hora de início`
+  String get pickStartTime {
+    return Intl.message(
+      'Escolher hora de início',
+      name: 'pickStartTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Escolher hora de fim`
+  String get pickEndTime {
+    return Intl.message(
+      'Escolher hora de fim',
+      name: 'pickEndTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dica: adicione um ou mais dias e, opcionalmente, intervalos de tempo.`
+  String get tipAddDays {
+    return Intl.message(
+      'Dica: adicione um ou mais dias e, opcionalmente, intervalos de tempo.',
+      name: 'tipAddDays',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dia`
+  String get viewDay {
+    return Intl.message(
+      'Dia',
+      name: 'viewDay',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Semana`
+  String get viewWeek {
+    return Intl.message(
+      'Semana',
+      name: 'viewWeek',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Todos`
+  String get all {
+    return Intl.message(
+      'Todos',
+      name: 'all',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Notificações`
+  String get notifications {
+    return Intl.message(
+      'Notificações',
+      name: 'notifications',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem notificações.`
+  String get noNotifications {
+    return Intl.message(
+      'Sem notificações.',
+      name: 'noNotifications',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Toque para abrir o cliente`
+  String get tapToOpenClient {
+    return Intl.message(
+      'Toque para abrir o cliente',
+      name: 'tapToOpenClient',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dispensar`
+  String get dismiss {
+    return Intl.message(
+      'Dispensar',
+      name: 'dismiss',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Fechar`
+  String get close {
+    return Intl.message(
+      'Fechar',
+      name: 'close',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `PENDENTE`
+  String get pendingConfirmationLabel {
+    return Intl.message(
+      'PENDENTE',
+      name: 'pendingConfirmationLabel',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `O cliente ainda precisa de confirmar este horário.`
+  String get pendingConfirmationMsg {
+    return Intl.message(
+      'O cliente ainda precisa de confirmar este horário.',
+      name: 'pendingConfirmationMsg',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Horário confirmado.`
+  String get timeIsConfirmed {
+    return Intl.message(
+      'Horário confirmado.',
+      name: 'timeIsConfirmed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Reserva (confirmação pendente)`
+  String get reservationPending {
+    return Intl.message(
+      'Reserva (confirmação pendente)',
+      name: 'reservationPending',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `À procura`
+  String get seeking {
+    return Intl.message(
+      'À procura',
+      name: 'seeking',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Pesquisar...`
+  String get searchEllipsis {
+    return Intl.message(
+      'Pesquisar...',
+      name: 'searchEllipsis',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Funções`
+  String get roles {
+    return Intl.message(
+      'Funções',
+      name: 'roles',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem funções atribuídas`
+  String get noRolesAssigned {
+    return Intl.message(
+      'Sem funções atribuídas',
+      name: 'noRolesAssigned',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Admin`
+  String get adminRole {
+    return Intl.message(
+      'Admin',
+      name: 'adminRole',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Admin + Trabalhadora`
+  String get adminWorkerRole {
+    return Intl.message(
+      'Admin + Trabalhadora',
+      name: 'adminWorkerRole',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Utilizador`
+  String get userRole {
+    return Intl.message(
+      'Utilizador',
+      name: 'userRole',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Trabalhadora`
+  String get workerRole {
+    return Intl.message(
+      'Trabalhadora',
+      name: 'workerRole',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `ID da Trabalhadora`
+  String get workerId {
+    return Intl.message(
+      'ID da Trabalhadora',
+      name: 'workerId',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Acesso`
+  String get access {
+    return Intl.message(
+      'Acesso',
+      name: 'access',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Sem acesso`
+  String get noAccess {
+    return Intl.message(
+      'Sem acesso',
+      name: 'noAccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Inicie sessão para gerir as suas marcações`
+  String get signInToManage {
+    return Intl.message(
+      'Inicie sessão para gerir as suas marcações',
+      name: 'signInToManage',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Marcado como cancelado`
+  String get markedAsCancelled {
+    return Intl.message(
+      'Marcado como cancelado',
+      name: 'markedAsCancelled',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

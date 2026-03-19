@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 /// Lock-screen style notifications overlay for Admin.
 /// - Slides in from the right
@@ -17,10 +18,11 @@ class AdminNotificationsOverlay extends StatelessWidget {
     BuildContext context, {
     required void Function(String clientId) onOpenClient,
   }) async {
+    final s = S.of(context);
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Notifications',
+      barrierLabel: s.notifications,
       barrierColor: Colors.black.withOpacity(0.35),
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (ctx, __, ___) {
@@ -52,6 +54,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final db = FirebaseFirestore.instance;
     final q = db
         .collection('clients')
@@ -87,14 +90,14 @@ class AdminNotificationsOverlay extends StatelessWidget {
                 const Icon(Icons.notifications_active_outlined,
                     color: Color(0xff721c80)),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Notifications',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    s.notifications,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Close',
+                  tooltip: s.close,
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),
                 ),
@@ -124,7 +127,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
                   return Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'No notifications.',
+                      s.noNotifications,
                       style: TextStyle(color: Colors.grey[700]),
                     ),
                   );
@@ -176,12 +179,12 @@ class AdminNotificationsOverlay extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         alignment: Alignment.centerLeft,
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.delete_outline, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Dismiss',
-                                style: TextStyle(
+                            const Icon(Icons.delete_outline, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Text(s.dismiss,
+                                style: const TextStyle(
                                     color: Colors.red, fontWeight: FontWeight.w800)),
                           ],
                         ),
@@ -256,7 +259,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
                                     if (clientId.isNotEmpty) ...[
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Tap to open client',
+                                        s.tapToOpenClient,
                                         style: TextStyle(
                                           color: tint,
                                           fontWeight: FontWeight.w900,

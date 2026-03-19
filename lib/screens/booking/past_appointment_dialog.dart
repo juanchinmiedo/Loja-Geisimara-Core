@@ -242,12 +242,12 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           title: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  "Remove appointment",
+                  s.removeAppointment,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
               IconButton(
@@ -267,24 +267,24 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
               children: [
                 _ReasonButton(
                   icon: Icons.event_busy,
-                  title: "Cancelled",
-                  subtitle: "Client cancelled the appointment",
+                  title: s.modeCancelled,
+                  subtitle: s.clientCancelledAppointment,
                   color: Colors.orange,
                   onTap: () => Navigator.pop(ctx, 'cancelled'),
                 ),
                 const SizedBox(height: 10),
                 _ReasonButton(
                   icon: Icons.person_off_outlined,
-                  title: "No show",
-                  subtitle: "Client did not attend",
+                  title: s.noShow,
+                  subtitle: s.clientDidNotAttend,
                   color: Colors.redAccent,
                   onTap: () => Navigator.pop(ctx, 'noShow'),
                 ),
                 const SizedBox(height: 10),
                 _ReasonButton(
                   icon: Icons.auto_fix_high,
-                  title: "My error",
-                  subtitle: "Remove permanently (wrong booking)",
+                  title: s.myError,
+                  subtitle: s.removePermanently,
                   color: const Color(0xff721c80),
                   onTap: () => Navigator.pop(ctx, 'deletePermanent'),
                 ),
@@ -356,10 +356,10 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
       Navigator.pop(context);
 
       final msg = (choice == 'cancelled')
-          ? "Marked as cancelled"
+          ? s.markedAsCancelled
           : (choice == 'noShow')
-              ? "Marked as no-show"
-              : "Deleted permanently";
+              ? s.markedAsNoShow
+              : s.deletedPermanently;
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
@@ -518,8 +518,8 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9\.,]')),
                   ],
                   decoration: InputDecoration(
-                    labelText: "Precio final (opcional)",
-                    hintText: "Si vacío, se usa el original",
+                    labelText: s.finalPriceOptional,
+                    hintText: s.finalPriceOptional,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.06),
@@ -542,7 +542,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
           child: Row(
             children: [
               IconButton(
-                tooltip: "Remove",
+                tooltip: s.remove,
                 onPressed: saving ? null : _removeAppointment,
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               ),
@@ -613,7 +613,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
                             final parsed = num.tryParse(fpText.replaceAll(',', '.'));
                             if (parsed == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(s.errorWithValue("Invalid final price"))),
+                                SnackBar(content: Text(s.errorWithValue(s.invalidFinalPrice))),
                               );
                               setState(() => saving = false);
                               return;

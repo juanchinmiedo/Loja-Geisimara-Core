@@ -274,12 +274,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           title: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  "Remove appointment",
+                  s.removeAppointment,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
               IconButton(
@@ -299,24 +299,24 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
               children: [
                 _ReasonButton(
                   icon: Icons.event_busy,
-                  title: "Cancelled",
-                  subtitle: "Client cancelled the appointment",
+                  title: s.modeCancelled,
+                  subtitle: s.clientCancelledAppointment,
                   color: Colors.orange,
                   onTap: () => Navigator.pop(ctx, 'cancelled'),
                 ),
                 const SizedBox(height: 10),
                 _ReasonButton(
                   icon: Icons.person_off_outlined,
-                  title: "No show",
-                  subtitle: "Client did not attend",
+                  title: s.noShow,
+                  subtitle: s.clientDidNotAttend,
                   color: Colors.redAccent,
                   onTap: () => Navigator.pop(ctx, 'noShow'),
                 ),
                 const SizedBox(height: 10),
                 _ReasonButton(
                   icon: Icons.auto_fix_high,
-                  title: "My error",
-                  subtitle: "Remove permanently (wrong booking)",
+                  title: s.myError,
+                  subtitle: s.removePermanently,
                   color: const Color(0xff721c80),
                   onTap: () => Navigator.pop(ctx, 'deletePermanent'),
                 ),
@@ -388,10 +388,10 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
       Navigator.pop(context);
 
       final msg = (choice == 'cancelled')
-          ? "Marked as cancelled"
+          ? s.markedAsCancelled
           : (choice == 'noShow')
-              ? "Marked as no-show"
-              : "Deleted permanently";
+              ? s.markedAsNoShow
+              : s.deletedPermanently;
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
@@ -484,8 +484,8 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                   onChanged: (value) {
                     setState(() => pendingConfirmation = value);
                     final msg = value
-                        ? 'Marked as reservation: pending client confirmation.'
-                        : 'Marked as confirmed appointment.';
+                        ? s.markedAsReservation
+                        : s.markedAsConfirmed;
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
                   },
                 ),
@@ -619,7 +619,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           child: Row(
             children: [
               IconButton(
-                tooltip: "Remove",
+                tooltip: s.remove,
                 onPressed: saving ? null : _removeAppointment,
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               ),
@@ -759,7 +759,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                               if (plan.confirmDelete.isNotEmpty && mounted) {
                                 String rangeLabelFrom(Map<String, dynamic> br) {
                                   final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-                                  if (ranges.isEmpty) return 'Any time';
+                                  if (ranges.isEmpty) return s.anyTime;
                                   final parts = <String>[];
                                   for (final rr in ranges) {
                                     if (rr is! Map) continue;
@@ -787,7 +787,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                                       context: context,
                                       builder: (dctx) {
                                         return AlertDialog(
-                                          title: const Text('Delete booking request(s)?'),
+                                          title: Text(s.deleteBookingRequests),
                                           content: SizedBox(
                                             width: double.maxFinite,
                                             child: ListView.separated(
@@ -804,7 +804,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      proc.isEmpty ? 'Request' : proc,
+                                                      proc.isEmpty ? s.request : proc,
                                                       style: const TextStyle(fontWeight: FontWeight.w900),
                                                     ),
                                                     const SizedBox(height: 4),
@@ -819,12 +819,12 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                                           actions: [
                                             TextButton(
                                               onPressed: () => Navigator.pop(dctx, false),
-                                              child: const Text('Keep'),
+                                              child: Text(s.keep),
                                             ),
                                             ElevatedButton(
                                               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                               onPressed: () => Navigator.pop(dctx, true),
-                                              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                              child: Text(s.delete, style: const TextStyle(color: Colors.white)),
                                             ),
                                           ],
                                         );

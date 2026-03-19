@@ -1,8 +1,6 @@
 {
   "@@locale": "es_ES",
-
   "console_firebase_database": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
-
   "gelA": "Aplicación de Gel",
   "acrylicA": "Aplicación de Acrílico",
   "fiberA": "Aplicación de Fibra",
@@ -18,56 +16,44 @@
   "nailDecorations": "Decoraciones",
   "unknown": "Desconocido",
   "nailRecomposition": "Recomposición de Uñas",
-
   "bottom_navigationbar": "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente",
-  
   "homeTab": "Inicio",
   "mapsTab": "Mapas",
   "clientsTab": "Clientes",
   "bookingTab": "Reservas",
   "profileTab": "Perfil",
-
   "_carrousel_dart": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "bookNowButton": "Reservar ahora",
   "bookNowTitle": "Agendar Cita",
   "bookNowSubtitle": "Programa tu cita en unos segundos",
- 
   "_onboarding_screenn": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "title": "Geisimara Nail Designer",
   "intro": "Manicura, Pedicura y Design de Cejas y Pestañas",
   "start": "Comenzar",
-
   "continueWithGoogle": "Continuar con Google",
   "startAdminMode": "Iniciar modo admin",
   "adminModeEnabled": "Modo admin activado",
-
   "continueAsGuest": "Continuar como invitado",
   "logout": "Cerrar sesión",
   "language": "Idioma",
-
   "category": "Categoría",
   "hands": "manos",
   "feet": "pies",
   "services": "servicios",
-
   "openUrlError": "NNo se pudo abrir {url}",
   "@openUrlError": {
     "description": "Error genérico al abrir una URL",
     "placeholders": {
-      "url": { "type": "String" }
+      "url": {
+        "type": "String"
+      }
     }
   },
-
   "noServicesFound": "No se encontraron servicios",
   "noSpecialistsFound": "No se encontraron especialistas",
-
   "googleLoginSuccess": "Sesión iniciada con Google",
   "guest": "Invitado",
-
   "_all_services/workers/worker_detail_screenns": "Esto es un comentario sobre el lugar donde estan estos textos",
-
   "tabInfo": "Info",
   "tabPortfolio": "Portfolio",
   "aboutMe": "Sobre mí",
@@ -78,80 +64,66 @@
   "errorLoadingServices": "Error al cargar servicios",
   "priceOnRequest": "Precio a solicitud",
   "viewProfileAndCatalog": "Ver perfil y catálogo",
-
   "_booking_admin_dialogs": "Texts used in create/edit appointment dialogs",
-
   "createAppointmentTitle": "Crear cita",
   "editAppointmentTitle": "Editar cita",
-
   "modeExisting": "Existente",
   "modeNew": "Nuevo",
-
   "searchClientLabel": "Buscar (nombre / teléfono / instagram)",
   "noMatches": "Sin resultados",
-
   "firstNameLabel": "Nombre",
   "lastNameLabel": "Apellido",
   "countryLabel": "País",
   "phoneLabel": "Teléfono",
   "instagramOptionalLabel": "Instagram (opcional)",
-
   "firstNameRequired": "El nombre es obligatorio",
   "lastNameRequired": "El apellido es obligatorio",
-
   "procedureLabel": "Procedimiento",
   "procedureRequired": "El procedimiento es obligatorio",
-
   "typeLabel": "Tipo",
   "typeRequired": "El tipo es obligatorio",
   "mostCommonBadge": "Más común",
-
   "selectTimePlaceholder": "Seleccionar hora",
   "timeRequired": "La hora es obligatoria",
-
   "priceLabel": "Precio: €{value}",
   "@priceLabel": {
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
-
   "timeMinutesLabel": "Tiempo: {minutes}m",
   "@timeMinutesLabel": {
     "placeholders": {
-      "minutes": { "type": "int" }
+      "minutes": {
+        "type": "int"
+      }
     }
   },
-
   "timeMinutesEmpty": "Tiempo: —",
-
   "selectExistingClient": "Selecciona un cliente existente",
   "phoneOrInstagramRequired": "Se requiere teléfono o Instagram",
-
   "appointmentCreated": "Cita creada",
   "appointmentUpdated": "Cita actualizada",
   "appointmentDeleted": "Cita eliminada",
-
   "deleteAppointmentTitle": "¿Eliminar cita?",
   "deleteAppointmentBody": "Esta acción no se puede deshacer.",
-
   "delete": "Eliminar",
   "no": "No",
   "save": "Guardar",
   "create": "Crear",
-
   "errorWithValue": "Error: {value}",
   "@errorWithValue": {
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
-
   "clientFallback": "Cliente",
   "serviceFallback": "Servicio",
-
   "_app_common": "Common app strings",
-
   "appTitle": "Salón de Manicura",
   "schedule": "Horario",
   "price": "Precio: {price}",
@@ -159,10 +131,165 @@
   "confirmBooking": "Confirmar reserva",
   "cancel": "Cancelar",
   "successBooking": "¡Tu cita ha sido confirmada!",
-
   "selectProcedurePlaceholder": "Seleccionar procedimiento",
   "selectProcedureHelper": "Por favor selecciona un procedimiento",
   "pickProcedureTitle": "Selecciona un procedimiento",
   "selectTypePlaceholder": "Seleccionar tipo",
-  "pickTypeTitle": "Selecciona un tipo"
+  "pickTypeTitle": "Selecciona un tipo",
+  "tapToViewProfile": "Ver perfil",
+  "upcomingAppointments": "Próximas citas",
+  "noUpcomingAppointments": "Sin próximas citas",
+  "noPastAppointments": "Sin citas pasadas",
+  "activeBookingRequests": "Solicitudes activas",
+  "newAppointment": "Nueva cita",
+  "newBookingRequest": "Nueva solicitud de reserva",
+  "editClient": "Editar cliente",
+  "editRequest": "Editar solicitud",
+  "saveClient": "Guardar cliente",
+  "requestUpdated": "Solicitud actualizada",
+  "lostClients": "Clientes perdidos",
+  "clientsNoVisitRecently": "Clientes sin visita reciente",
+  "atRiskClients": "En riesgo (30–45d)",
+  "lostClientsTab": "Perdidos (45d+)",
+  "noAtRiskClients": "Sin clientes en riesgo ahora",
+  "noLostClients": "Sin clientes perdidos ahora",
+  "deleteClientTitle": "¿Eliminar cliente?",
+  "deleteRequestTitle": "¿Eliminar solicitud?",
+  "bookingRequest": "Solicitud de reserva",
+  "lookingForAppointment": "Buscando cita",
+  "notLooking": "Sin búsqueda activa",
+  "adminHome": "Inicio Admin",
+  "subtitleLooking": "Clientes buscando cita",
+  "subtitleCancelled": "Más cancelaciones (después más asistidos)",
+  "subtitleNoShow": "Más ausencias (después más asistidos)",
+  "modeLooking": "Buscando",
+  "modeCancelled": "Cancelados",
+  "modeNoShow": "No vino",
+  "lostClientsButton": "Clientes perdidos  (30d+ / 45d+)",
+  "results": "Resultados",
+  "noActiveBookingRequests": "Sin solicitudes activas ahora.",
+  "noClientsMatchFilter": "Ningún cliente coincide con el filtro.",
+  "attended": "Asistió",
+  "lastVisit": "Última visita",
+  "createClient": "Crear cliente",
+  "clientCreated": "Cliente creado",
+  "phoneOrInstagramRequiredMsg": "Se requiere teléfono o Instagram",
+  "required": "Obligatorio",
+  "countryCode": "Código de país",
+  "searchHint": "Buscar",
+  "weekdayMon": "Lun",
+  "weekdayTue": "Mar",
+  "weekdayWed": "Mié",
+  "weekdayThu": "Jue",
+  "weekdayFri": "Vie",
+  "weekdaySat": "Sáb",
+  "weekdaySun": "Dom",
+  "clientUpdated": "Cliente actualizado",
+  "clientDeleted": "Cliente eliminado",
+  "deleteClientConfirm": "Esto eliminará el cliente. ¿Continuar?",
+  "bookingRequestCreated": "Solicitud de reserva creada",
+  "disableBookingRequests": "¿Desactivar solicitudes de reserva?",
+  "disableBookingConfirmNone": "Desactivar 'Buscando cita'. ¿Continuar?",
+  "disableBookingConfirmMany": "¿Eliminar todas las {count} solicitudes activas y desactivar?",
+  "@disableBookingConfirmMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectProcedureFirst": "Selecciona primero un procedimiento",
+  "instagram": "Instagram",
+  "upcoming": "Próximas",
+  "past": "Pasadas",
+  "confirm": "Confirmar",
+  "deleteClient": "Eliminar cliente",
+  "deleteRequest": "Eliminar solicitud",
+  "rangeMustBeAtLeast": "El intervalo debe ser al menos {dur} min",
+  "@rangeMustBeAtLeast": {
+    "placeholders": {
+      "dur": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSchedule": "Agenda Admin",
+  "appointments": "Citas",
+  "noAppointmentsForDay": "Sin citas para este día",
+  "pendingConfirmation": "Confirmación pendiente",
+  "add": "Añadir",
+  "servicesStillLoading": "Los servicios aún están cargando...",
+  "blockThisTime": "Bloquear este horario",
+  "addNewBlock": "Añadir nuevo bloqueo",
+  "existingBlocks": "Bloqueos existentes",
+  "removeBlock": "¿Eliminar bloqueo?",
+  "remove": "Eliminar",
+  "from": "Desde",
+  "none": "Ninguno",
+  "endMustBeAfterStart": "El fin debe ser después del inicio",
+  "reasonOptional": "Motivo (opcional)",
+  "blockTimeDateLabel": "Bloquear horario – {date}",
+  "@blockTimeDateLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "any": "Cualquiera",
+  "anyTime": "Cualquier hora",
+  "clientCancelledAppointment": "El cliente canceló la cita",
+  "clientDidNotAttend": "El cliente no asistió",
+  "noShow": "No se presentó",
+  "myError": "Mi error",
+  "removeAppointment": "Eliminar cita",
+  "removePermanently": "Eliminar permanentemente (reserva incorrecta)",
+  "deletedPermanently": "Eliminado permanentemente",
+  "markedAsConfirmed": "Marcado como cita confirmada.",
+  "markedAsReservation": "Marcado como reserva: confirmación pendiente.",
+  "markedAsNoShow": "Marcado como no se presentó",
+  "deleteBookingRequests": "¿Eliminar solicitud(es) de reserva?",
+  "keep": "Mantener",
+  "request": "Solicitud",
+  "duplicateName": "Nombre duplicado",
+  "invalidFinalPrice": "Precio final inválido",
+  "finalPriceOptional": "Precio final (opcional)",
+  "checking": "Verificando…",
+  "noAvailability": "Sin disponibilidad",
+  "deleteRequestConfirm": "Esto eliminará esta solicitud de reserva.",
+  "worker": "Trabajadora",
+  "createRequest": "Crear solicitud",
+  "addDay": "Añadir día",
+  "days": "Días",
+  "ranges": "Intervalos",
+  "addRange": "+ Añadir intervalo",
+  "pickPreferredDay": "Elegir día preferido",
+  "pickStartTime": "Elegir hora de inicio",
+  "pickEndTime": "Elegir hora de fin",
+  "tipAddDays": "Tip: añade uno o más días y, opcionalmente, intervalos de tiempo.",
+  "viewDay": "Día",
+  "viewWeek": "Semana",
+  "all": "Todos",
+  "notifications": "Notificaciones",
+  "noNotifications": "Sin notificaciones.",
+  "tapToOpenClient": "Toca para abrir el cliente",
+  "dismiss": "Descartar",
+  "close": "Cerrar",
+  "pendingConfirmationLabel": "PENDIENTE",
+  "pendingConfirmationMsg": "El cliente aún necesita confirmar este horario.",
+  "timeIsConfirmed": "Horario confirmado.",
+  "reservationPending": "Reserva (confirmación pendiente)",
+  "seeking": "Buscando",
+  "searchEllipsis": "Buscar...",
+  "roles": "Roles",
+  "noRolesAssigned": "Sin roles asignados",
+  "adminRole": "Admin",
+  "adminWorkerRole": "Admin + Trabajadora",
+  "userRole": "Usuario",
+  "workerRole": "Trabajadora",
+  "workerId": "ID de Trabajadora",
+  "access": "Acceso",
+  "noAccess": "Sin acceso",
+  "signInToManage": "Inicia sesión para gestionar tus citas",
+  "markedAsCancelled": "Marcado como cancelado"
 }

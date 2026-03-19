@@ -13,6 +13,7 @@
 //   );
 
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/repositories/blocked_slot_repo.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
@@ -98,6 +99,7 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
   }
 
   Future<void> _pickEnd() async {
+    final s = S.of(context);
     final picked = await AppTimePicker.pick5m(
         context: context,
         initial: TimeOfDayUtils.fromMinutes(_endMin));
@@ -106,7 +108,7 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
         TimeOfDayUtils.toMinutes(picked).clamp(7 * 60 + 30, 21 * 60);
     if (min <= _startMin) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('End must be after start')));
+        SnackBar(content: Text(s.endMustBeAfterStart)));
       return;
     }
     setState(() => _endMin = min);
@@ -135,10 +137,11 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
   }
 
   Future<void> _deleteSlot(BlockedSlot slot) async {
+    final s = S.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove block?'),
+        title: Text(s.removeBlock),
         content: Text(
           'Remove ${DateTimeUtils.hhmmFromMinutes(slot.startMin)} – '
           '${DateTimeUtils.hhmmFromMinutes(slot.endMin)}'
@@ -147,12 +150,12 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(s.cancel)),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove',
-                style: TextStyle(color: Colors.white)),
+            child: Text(s.remove,
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -166,6 +169,7 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final dateLabel = DateTimeUtils.formatYyyyMmDdToDdMmYyyy(
         _yyyymmdd(widget.date));
 
@@ -199,14 +203,14 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
               const SizedBox(height: 14),
 
               // Existing blocks
-              const Text('Existing blocks',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(s.existingBlocks,style: 
+                const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               if (_loadingExisting)
                 const Center(
                     child: CircularProgressIndicator(color: kPurple))
               else if (_existing.isEmpty)
-                Text('None', style: TextStyle(color: Colors.grey[600]))
+                Text(s.none, style: TextStyle(color: Colors.grey[600]))
               else
                 ..._existing.map((s) => ListTile(
                       dense: true,
@@ -229,15 +233,15 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
               const Divider(height: 24),
 
               // New block form
-              const Text('Add new block',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(s.addNewBlock,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
 
               Row(
                 children: [
                   Expanded(
                     child: _TimePill(
-                      label: 'From',
+                      label: s.from,
                       value: DateTimeUtils.hhmmFromMinutes(_startMin),
                       onTap: _pickStart,
                     ),
@@ -257,7 +261,7 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
               TextField(
                 controller: _reasonCtrl,
                 decoration: InputDecoration(
-                  labelText: 'Reason (optional)',
+                  labelText: s.reasonOptional,
                   hintText: 'e.g. Lunch, Meeting…',
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -282,8 +286,8 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.block, color: Colors.white),
-                  label: const Text('Block this time',
-                      style: TextStyle(
+                  label: Text(s.blockThisTime,
+                      style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w900)),
                 ),
@@ -305,6 +309,7 @@ class _TimePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(

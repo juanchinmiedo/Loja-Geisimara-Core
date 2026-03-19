@@ -41,7 +41,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   static const Color kPurple = Color(0xff721c80);
   static const Color kGreen  = Color(0xff2e7d32);
 
-
   late final TabController _tabController;
   late final BookingRequestRepo _brRepo;
   final _avSvc = AvailabilityService();
@@ -184,22 +183,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   // ── Booking request actions ───────────────────────────────────────────────────
 
   Future<void> _confirmAndDisableLooking() async {
+    final s = S.of(context);
     final docs = await _brRepo.getActiveRequestsForClient(widget.clientId);
     if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Disable booking requests?'),
+        title: Text(s.disableBookingRequests),
         content: Text(docs.isEmpty
-            ? "Disable 'Looking for appointment'. Continue?"
-            : 'Delete all ${docs.length} active requests and disable?'),
+            ? s.disableBookingConfirmNone
+            : s.disableBookingConfirmMany(docs.length)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(s.cancel)),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+            child: Text(s.confirm, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -216,9 +216,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   }
 
   Future<void> _createRequest() async {
+    final s = S.of(context);
     if (_brServiceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Select a procedure first')));
+          SnackBar(content: Text(s.selectProcedureFirst)));
       return;
     }
     _brServiceData ??= (await FirebaseFirestore.instance
@@ -254,12 +255,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     });
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking request created')));
+        SnackBar(content: Text(s.bookingRequestCreated)));
   }
 
   // ── Bottom sheets ─────────────────────────────────────────────────────────────
 
   Future<void> _openEditSheet() async {
+    final s = S.of(context);
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -275,34 +277,34 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Edit client',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text(s.editClient,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 const SizedBox(height: 14),
                 TextField(controller: _fnCtrl,
-                    decoration: const InputDecoration(labelText: 'First name',
-                        border: OutlineInputBorder())),
+                    decoration: InputDecoration(labelText: s.firstNameLabel,
+                        border: const OutlineInputBorder())),
                 const SizedBox(height: 10),
                 TextField(controller: _lnCtrl,
-                    decoration: const InputDecoration(labelText: 'Last name',
-                        border: OutlineInputBorder())),
+                    decoration: InputDecoration(labelText: s.lastNameLabel,
+                        border: const OutlineInputBorder())),
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(flex: 2, child: TextField(
                       controller: _countryCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Country code',
-                          border: OutlineInputBorder()))),
+                      decoration: InputDecoration(labelText: s.countryCode,
+                          border: const OutlineInputBorder()))),
                   const SizedBox(width: 10),
                   Expanded(flex: 4, child: TextField(
                       controller: _phoneCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Phone',
-                          border: OutlineInputBorder()))),
+                      decoration: InputDecoration(labelText: s.phoneLabel,
+                          border: const OutlineInputBorder()))),
                 ]),
                 const SizedBox(height: 10),
                 TextField(controller: _igCtrl,
-                    decoration: const InputDecoration(labelText: 'Instagram',
-                        border: OutlineInputBorder())),
+                    decoration: InputDecoration(labelText: s.instagram,
+                        border: const OutlineInputBorder())),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -326,13 +328,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Client updated')));
+                          SnackBar(content: Text(s.clientUpdated)));
                       await _loadClient();
                     },
                     icon: const Icon(Icons.save_outlined, color: Colors.white),
-                    label: const Text('Save client',
-                        style: TextStyle(color: Colors.white,
-                            fontWeight: FontWeight.w900)),
+                    label: Text(s.saveClient,
+                      style: const TextStyle(color: Colors.white,
+                        fontWeight: FontWeight.w900)),
                   ),
                 ),
               ],
@@ -353,6 +355,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
       _brServiceData = null; _brDurationMin = 30;
     });
 
+    final s = S.of(context);
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -369,8 +373,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('New booking request',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  Text(s.newBookingRequest,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                   const SizedBox(height: 14),
                   BookingRequestCreateForm(
                     selectedWorkerId: _brWorkerId,
@@ -443,6 +447,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
 
     bool saving = false;
 
+    final s = S.of(context);
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -456,8 +462,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
             Future<void> save() async {
               if (saving) return;
               if (serviceId == null || serviceId!.isEmpty) {
+                final s = S.of(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Select a procedure first')));
+                    SnackBar(content: Text(s.selectProcedureFirst)));
                 return;
               }
               setLocal(() => saving = true);
@@ -487,7 +494,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 if (!mounted) return;
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Request updated')));
+                    SnackBar(content: Text(s.requestUpdated)));
               } finally {
                 if (ctx.mounted) setLocal(() => saving = false);
               }
@@ -500,8 +507,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(children: [
-                      const Expanded(child: Text('Edit request',
-                          style: TextStyle(fontWeight: FontWeight.w900,
+                      Expanded(child: Text(s.editRequest,
+                          style: const TextStyle(fontWeight: FontWeight.w900,
                               fontSize: 16))),
                       IconButton(
                           onPressed: saving ? null : () => Navigator.pop(ctx),
@@ -815,6 +822,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   // ── Upcoming tab ──────────────────────────────────────────────────────────────
 
   Widget _buildUpcomingTab() {
+    final s = S.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
@@ -822,7 +830,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         children: [
           // ── FIX 1: Switch izquierda, botón verde derecha (solo si _looking) ──
           AppSectionCard(
-            title: 'Booking request',
+            title: s.bookingRequest,
             child: Row(
               children: [
                 // Switch
@@ -842,7 +850,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _looking ? 'Looking for appointment' : 'Not looking',
+                    _looking ? s.lookingForAppointment : s.notLooking,
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -853,7 +861,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     color: kGreen,
                     size: 32,
                     iconSize: 16,
-                    tooltip: 'New booking request',
+                    tooltip: s.newBookingRequest,
                     onTap: _openBookingRequestSheet,
                   ),
               ],
@@ -881,7 +889,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Active booking requests',
+                    Text(s.activeBookingRequests,
                         style: TextStyle(
                             fontWeight: FontWeight.w900, fontSize: 14)),
                     const SizedBox(height: 8),
@@ -901,19 +909,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                             final ok = await showDialog<bool>(
                               context: context,
                               builder: (dctx) => AlertDialog(
-                                title: const Text('Delete request?'),
+                                title: Text(s.deleteRequestTitle),
                                 actions: [
                                   TextButton(
                                       onPressed: () =>
                                           Navigator.pop(dctx, false),
-                                      child: const Text('No')),
+                                      child: Text(s.no)),
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.red),
                                     onPressed: () =>
                                         Navigator.pop(dctx, true),
-                                    child: const Text('Delete',
-                                        style: TextStyle(
+                                    child: Text(S.of(context).delete,
+                                        style: const TextStyle(
                                             color: Colors.white)),
                                   ),
                                 ],
@@ -948,7 +956,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
 
           // ── Upcoming appointments ─────────────────────────────────────────
           const SizedBox(height: 16),
-          const Text('Upcoming appointments',
+          Text(s.upcomingAppointments,
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
           const SizedBox(height: 10),
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -964,7 +972,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               }
               final docs = snap.data?.docs ?? [];
               if (docs.isEmpty) {
-                return Text('No upcoming appointments.',
+                return Text(s.noUpcomingAppointments,
                     style: TextStyle(color: Colors.grey[700]));
               }
               return Column(
@@ -979,6 +987,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   // ── Past tab ──────────────────────────────────────────────────────────────────
 
   Widget _buildPastTab() {
+    final s = S.of(context);
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _pastStream(),
       builder: (_, snap) {
@@ -992,7 +1001,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
-          return Center(child: Text('No past appointments.',
+          return Center(child: Text(s.noPastAppointments,
               style: TextStyle(color: Colors.grey[700])));
         }
         return ListView.builder(
@@ -1007,6 +1016,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   // ── Bottom bar ────────────────────────────────────────────────────────────────
 
   Widget _bottomBar() {
+    final s = S.of(context);
     return SafeArea(
       top: false,
       child: Container(
@@ -1024,7 +1034,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               icon: Icons.edit_outlined,
               color: Colors.grey[700]!,
               size: 44,
-              tooltip: 'Edit client',
+              tooltip: s.editClient,
               onTap: _openEditSheet,
             ),
             const Spacer(),
@@ -1044,7 +1054,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 },
                 icon: const Icon(Icons.edit_calendar_outlined,
                     color: Colors.white, size: 18),
-                label: const Text('New appointment',
+                label: Text(s.newAppointment,
                     style: TextStyle(color: Colors.white,
                         fontWeight: FontWeight.w900)),
               ),
@@ -1054,24 +1064,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               icon: Icons.delete_outline,
               color: Colors.red,
               size: 44,
-              tooltip: 'Delete client',
+              tooltip: s.deleteClient,
               onTap: () async {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (dctx) => AlertDialog(
-                    title: const Text('Delete client?'),
-                    content: const Text(
-                        'This will delete the client document. Continue?'),
+                    title: Text(s.deleteClientTitle),
+                    content: Text(s.deleteClientConfirm),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(dctx, false),
-                          child: const Text('No')),
+                          child: Text(s.no)),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red),
                         onPressed: () => Navigator.pop(dctx, true),
-                        child: const Text('Delete',
-                            style: TextStyle(color: Colors.white)),
+                        child: Text(s.delete,
+                            style: const TextStyle(color: Colors.white)),
                       ),
                     ],
                   ),
@@ -1081,7 +1090,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     .collection('clients').doc(widget.clientId).delete();
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Client deleted')));
+                    SnackBar(content: Text(s.clientDeleted)));
                 Navigator.pop(context);
               },
             ),
@@ -1117,7 +1126,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               labelColor: kPurple,
               unselectedLabelColor: Colors.grey,
               indicatorColor: kPurple,
-              tabs: const [Tab(text: 'Upcoming'), Tab(text: 'Past')],
+              tabs: [Tab(text: S.of(context).upcoming), Tab(text: S.of(context).past)],
             ),
           ),
           Expanded(
