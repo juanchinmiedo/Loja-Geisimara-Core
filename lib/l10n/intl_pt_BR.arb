@@ -291,5 +291,10 @@
   "access": "Acesso",
   "noAccess": "Sem acesso",
   "signInToManage": "Inicie sessão para gerir as suas marcações",
-  "markedAsCancelled": "Marcado como cancelado"
+  "markedAsCancelled": "Marcado como cancelado",
+  "statusScheduled": "Agendado",
+  "statusDone": "Concluído",
+  "statusAttended": "Compareceu",
+  "statusCancelled": "Cancelado",
+  "statusNoShow": "Faltou"
 }

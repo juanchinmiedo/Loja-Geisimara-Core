@@ -2464,6 +2464,56 @@ class S {
       args: [],
     );
   }
+
+  /// `Agendado`
+  String get statusScheduled {
+    return Intl.message(
+      'Agendado',
+      name: 'statusScheduled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Concluído`
+  String get statusDone {
+    return Intl.message(
+      'Concluído',
+      name: 'statusDone',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Compareceu`
+  String get statusAttended {
+    return Intl.message(
+      'Compareceu',
+      name: 'statusAttended',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Cancelado`
+  String get statusCancelled {
+    return Intl.message(
+      'Cancelado',
+      name: 'statusCancelled',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Faltou`
+  String get statusNoShow {
+    return Intl.message(
+      'Faltou',
+      name: 'statusNoShow',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

@@ -291,5 +291,10 @@
   "access": "Access",
   "noAccess": "No access",
   "signInToManage": "Sign in to manage your appointments",
-  "markedAsCancelled": "Marked as cancelled"
+  "markedAsCancelled": "Marked as cancelled",
+  "statusScheduled": "Scheduled",
+  "statusDone": "Done",
+  "statusAttended": "Attended",
+  "statusCancelled": "Cancelled",
+  "statusNoShow": "No show"
 }

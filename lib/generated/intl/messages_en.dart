@@ -345,6 +345,11 @@ class MessageLookup extends MessageLookupByLibrary {
         "start": MessageLookupByLibrary.simpleMessage("Get Started"),
         "startAdminMode":
             MessageLookupByLibrary.simpleMessage("Start admin mode"),
+        "statusAttended": MessageLookupByLibrary.simpleMessage("Attended"),
+        "statusCancelled": MessageLookupByLibrary.simpleMessage("Cancelled"),
+        "statusDone": MessageLookupByLibrary.simpleMessage("Done"),
+        "statusNoShow": MessageLookupByLibrary.simpleMessage("No show"),
+        "statusScheduled": MessageLookupByLibrary.simpleMessage("Scheduled"),
         "subtitleCancelled": MessageLookupByLibrary.simpleMessage(
             "Most cancellations (then most attended)"),
         "subtitleLooking": MessageLookupByLibrary.simpleMessage(

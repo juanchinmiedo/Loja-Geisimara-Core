@@ -291,5 +291,10 @@
   "access": "Acceso",
   "noAccess": "Sin acceso",
   "signInToManage": "Inicia sesión para gestionar tus citas",
-  "markedAsCancelled": "Marcado como cancelado"
+  "markedAsCancelled": "Marcado como cancelado",
+  "statusScheduled": "Programada",
+  "statusDone": "Realizada",
+  "statusAttended": "Asistió",
+  "statusCancelled": "Cancelada",
+  "statusNoShow": "No se presentó"
 }

@@ -7,9 +7,10 @@
 //  • Todo lo demás (dialogs, lifecycle, day tile) idéntico
 
 import 'dart:async';
+import 'package:salon_app/widgets/language_pill.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:salon_app/generated/l10n.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/user_provider.dart';
@@ -179,9 +180,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     DateTime? selectedDayOverride,
   }) async {
     if (_services.isEmpty) {
-      final s = S.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(s.servicesStillLoading)));
+          const SnackBar(content: Text('Services are still loading...')));
       return;
     }
     final day = selectedDayOverride ?? _selectedDay;
@@ -236,6 +236,19 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
+  Widget _withPill(BuildContext context, Widget child) {
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          right: 18,
+          child: const LanguagePill(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -254,14 +267,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           AppGradientHeader(
             title: s.adminSchedule,
             height: 240,
-            padding: const EdgeInsets.only(top: 38, left: 18, right: 18),
-            centerTitle: true,
-            titleStyle: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              letterSpacing: 1.1,
-              fontWeight: FontWeight.w500,
-            ),
+            padding: const EdgeInsets.only(top: 46, left: 18, right: 18),
             child: PrettyDateStrip(
               selectedDate: _selectedDay,
               onChange: (d) => setState(() => _selectedDay = d),
@@ -295,12 +301,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                         color: const Color(0xff721c80),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.add, color: Colors.white, size: 18),
-                          SizedBox(width: 6),
-                          Text('Add',
-                              style: TextStyle(
+                          const Icon(Icons.add, color: Colors.white, size: 18),
+                          const SizedBox(width: 6),
+                          Text(s.add,
+                              style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800)),
                         ],
@@ -315,7 +321,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
 
     if (view.isWeek) {
-      return Scaffold(
+      return _withPill(context, Scaffold(
         body: Column(
           children: [
             headerAndControls(),
@@ -332,10 +338,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      );
+      ));
     }
 
-    return Scaffold(
+    return _withPill(context, Scaffold(
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -352,8 +358,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      ),
-    );
+      )));
   }
 
   // ── Week view ─────────────────────────────────────────────────────────────────
@@ -463,7 +468,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     required UserProvider userProv,
   }) {
     final dateKey = _yyyymmdd(_selectedDay);
-    final s = S.of(context);
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: () {
         final base = FirebaseFirestore.instance
@@ -537,7 +542,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             if (docs.isEmpty && blocked.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 24),
-                child: Text(s.noAppointmentsForDay,
+                child: Text('No appointments for this day',
                     style: TextStyle(color: Colors.grey[700])),
               );
             }
@@ -632,7 +637,6 @@ class _BlockedSlotDayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = S.of(context);
     final startStr = DateTimeUtils.hhmmFromMinutes(slot.startMin);
     final endStr   = DateTimeUtils.hhmmFromMinutes(slot.endMin);
 
@@ -748,7 +752,6 @@ class _AdminAppointmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = S.of(context);
     final data       = doc.data() as Map<String, dynamic>? ?? {};
     final isPending  = PendingConfirmationUtils.isPending(data);
     final dt         = _ts(data, 'appointmentDate');
@@ -766,8 +769,8 @@ class _AdminAppointmentTile extends StatelessWidget {
     final key        = _s(data, 'serviceNameKey', '');
     final serviceName = key.isNotEmpty
         ? trServiceOrAddon(context, key)
-        : _s(data, 'serviceName', s.serviceFallback);
-    final clientName = _s(data, 'clientName', s.clientFallback);
+        : _s(data, 'serviceName', 'Service');
+    final clientName = _s(data, 'clientName', 'Client');
 
     final ctry = data['clientCountry'];
     final ph   = data['clientPhone'];
@@ -860,8 +863,8 @@ class _AdminAppointmentTile extends StatelessWidget {
                             .withOpacity(0.22),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(s.pendingConfirmation,
-                          style: const TextStyle(
+                      child: const Text('Pending confirmation',
+                          style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                               color: Colors.black87)),

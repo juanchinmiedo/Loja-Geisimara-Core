@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/generated/l10n.dart';
+import 'package:salon_app/widgets/language_pill.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
@@ -19,6 +20,7 @@ import 'package:salon_app/components/client_card.dart';
 import 'package:salon_app/screens/clients/clients_profile_screen.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
+import 'package:salon_app/provider/locale_provider.dart';
 
 class ClientsAdminScreen extends StatefulWidget {
   const ClientsAdminScreen({super.key});
@@ -36,6 +38,19 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   final Map<String, String> _nextApptCache = {};
   // IDs ya prefetcheados (evita repetir la query batch en cada rebuild)
   final Set<String> _prefetchedIds = {};
+
+  Locale? _lastLocale;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final locale = context.read<LocaleProvider>().locale;
+    if (_lastLocale != null && _lastLocale != locale) {
+      _nextApptCache.clear();
+      _prefetchedIds.clear();
+    }
+    _lastLocale = locale;
+  }
 
   @override
   void initState() {
@@ -170,7 +185,9 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
         .limit(100)
         .snapshots();
 
-    return Scaffold(
+    return Stack(
+      children: [
+      Scaffold(
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: stream,
         builder: (_, snap) {
@@ -205,7 +222,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
               // Header con search bar
               SliverToBoxAdapter(
                 child: AppGradientHeader(
-                  title: s.clientsTab,
+                  title: 'Clients',
                   subtitle: s.searchClientLabel,
                   child: Row(
                     children: [
@@ -217,7 +234,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.95),
                             prefixIcon: const Icon(Icons.search),
-                            hintText: s.searchHint,
+                            hintText: 'Search',
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             contentPadding: const EdgeInsets.symmetric(
@@ -324,7 +341,14 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
           );
         },
       ),
-    );
+    ),
+      // Language pill
+      Positioned(
+        top: MediaQuery.of(context).padding.top + 10,
+        right: 18,
+        child: const LanguagePill(),
+      ),
+    ]);
   }
 }
 
@@ -358,13 +382,12 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final s = S.of(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          Expanded(child: Text(s.createClient,
-              style: const TextStyle(fontWeight: FontWeight.w900))),
+          const Expanded(child: Text('Create client',
+              style: TextStyle(fontWeight: FontWeight.w900))),
           IconButton(
               onPressed: _saving ? null : () => Navigator.pop(context),
               icon: const Icon(Icons.close)),
@@ -377,37 +400,37 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(controller: _fnCtrl,
-                  decoration: InputDecoration(labelText: s.firstNameLabel,
-                      border: const OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'First name',
+                      border: OutlineInputBorder()),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? s.required : null),
+                      ? 'Required' : null),
               const SizedBox(height: 10),
               TextFormField(controller: _lnCtrl,
-                  decoration: InputDecoration(labelText: s.lastNameLabel,
-                      border: const OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Last name',
+                      border: OutlineInputBorder()),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? s.required : null),
+                      ? 'Required' : null),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(flex: 2, child: TextFormField(
                     controller: _countryCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: s.countryCode,
-                        border: const OutlineInputBorder()))),
+                    decoration: const InputDecoration(labelText: 'Country code',
+                        border: OutlineInputBorder()))),
                 const SizedBox(width: 10),
                 Expanded(flex: 4, child: TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: s.phoneLabel,
-                        border: const OutlineInputBorder()))),
+                    decoration: const InputDecoration(labelText: 'Phone',
+                        border: OutlineInputBorder()))),
               ]),
               const SizedBox(height: 10),
               TextFormField(controller: _igCtrl,
-                  decoration: InputDecoration(
-                      labelText: s.instagramOptionalLabel,
-                      border: const OutlineInputBorder())),
+                  decoration: const InputDecoration(
+                      labelText: 'Instagram (optional)',
+                      border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              Text(s.phoneOrInstagramRequiredMsg,
+              Text('Phone OR Instagram required',
                   style: TextStyle(color: Colors.grey[700], fontSize: 12)),
             ],
           ),
@@ -430,7 +453,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
               final ig   = widget.clientService.normalizeInstagram(_igCtrl.text);
               if (ctry == 0 && ph == 0 && ig.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(s.phoneOrInstagramRequiredMsg)));
+                    const SnackBar(content: Text('Phone or Instagram required')));
                 return;
               }
               setState(() => _saving = true);
@@ -445,7 +468,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 if (!mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(s.clientCreated)));
+                    const SnackBar(content: Text('Client created')));
               } finally {
                 if (mounted) setState(() => _saving = false);
               }
@@ -454,7 +477,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : Text(s.create, style: const TextStyle(
+                : const Text('Create', style: TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w900)),
           ),
         ),

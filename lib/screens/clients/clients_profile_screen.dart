@@ -19,6 +19,7 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
+import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/services/availability_service.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
@@ -584,6 +585,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
 
   // ── Appointment card ──────────────────────────────────────────────────────────
 
+  String _translateStatus(BuildContext context, String status) {
+    final s = S.of(context);
+    switch (status) {
+      case 'scheduled': return s.statusScheduled;
+      case 'done':      return s.statusDone;
+      case 'attended':  return s.statusAttended;
+      case 'cancelled': return s.statusCancelled;
+      case 'noShow':    return s.statusNoShow;
+      default:          return status;
+    }
+  }
+
+
   Widget _apptCard(Map<String, dynamic> d, {bool isPast = false}) {
     final ts         = d['appointmentDate'];
     final date       = ts is Timestamp ? ts.toDate() : null;
@@ -592,13 +606,18 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         : (d['date'] ?? '').toString();
     final timeStr    = date != null
         ? DateTimeUtils.hhmmFromMinutes(date.hour * 60 + date.minute) : '';
-    final service    = (d['serviceName'] ?? d['service'] ?? '').toString();
+    final svcKey = (d['serviceNameKey'] ?? '').toString().trim();
+    final svcRaw = (d['serviceName'] ?? d['service'] ?? '').toString();
+    final service = svcKey.isNotEmpty
+        ? trServiceOrAddon(context, svcKey)
+        : svcRaw;
     final rawStatus  = (d['status'] ?? '').toString();
     final workerName = (d['workerName'] ?? d['workerId'] ?? '').toString();
 
     final displayStatus = (isPast && rawStatus == 'scheduled')
         ? 'attended'
         : rawStatus;
+    final statusLabel = _translateStatus(context, displayStatus);
 
     final statusColor = {
       'scheduled':      kPurple,
@@ -641,7 +660,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
               color: statusColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(displayStatus,
+            child: Text(statusLabel,
                 style: TextStyle(color: statusColor,
                     fontWeight: FontWeight.w700, fontSize: 12)),
           ),

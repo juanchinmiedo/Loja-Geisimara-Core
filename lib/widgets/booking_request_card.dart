@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
+import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/utils/booking_request_utils.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
@@ -85,29 +87,36 @@ class BookingRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _workerLine(String? workerId) {
+  Widget _workerLine(BuildContext context, String? workerId) {
+    final s = S.of(context);
     if (workerId == null || workerId.trim().isEmpty) {
-      return const Text("• Worker: Any");
+      return Text('• ' + s.worker + ': ' + s.any);
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection("workers").doc(workerId).snapshots(),
       builder: (context, snap) {
+        final s2 = S.of(context);
         if (snap.hasData && snap.data!.exists) {
           final data = snap.data!.data() ?? const <String, dynamic>{};
           final label = BookingRequestUtils.workerLabelFrom(data, workerId);
-          return Text("• Worker: $label");
+          return Text('• ' + s2.worker + ': ' + label);
         }
-        return Text("• Worker: $workerId");
+        return Text('• ' + s2.worker + ': ' + workerId);
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final days = (br['preferredDays'] as List?) ?? const [];
     final ranges = (br['preferredTimeRanges'] as List?) ?? const [];
-    final proc = (br['serviceNameLabel'] ?? br['serviceNameKey'] ?? '').toString().trim();
+    final svcKey   = (br['serviceNameKey']   ?? '').toString().trim();
+    final svcLabel = (br['serviceNameLabel'] ?? '').toString().trim();
+    final proc = svcKey.isNotEmpty
+        ? trServiceOrAddon(context, svcKey)
+        : svcLabel;
     final workerId = br['workerId'] as String?;
 
     return Container(
@@ -132,30 +141,32 @@ class BookingRequestCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Expanded(
-                        child: Text("Request", style: TextStyle(fontWeight: FontWeight.w900)),
+                      Expanded(
+                        child: Text(s.request, style: const TextStyle(fontWeight: FontWeight.w900)),
                       ),
                       _availabilityPill(),
                     ],
                   ),
                   const SizedBox(height: 6),
 
-                  _workerLine(workerId),
+                  _workerLine(context, workerId),
 
                   if (days.isNotEmpty)
                     Text(
-                      "• Day(s): ${days.map((d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())).join(', ')}",
+                      '• ' + s.days + ': ' + days.map(
+                        (d) => BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(d.toString())
+                      ).join(', '),
                     ),
 
                   if (ranges.isNotEmpty)
                     Text(
-                      "• Range(s): ${ranges.map((r) {
+                      '• ' + s.ranges + ': ' + ranges.map((r) {
                         final m = Map<String, dynamic>.from(r as Map);
                         return _formatRange(m);
-                      }).join('; ')}",
+                      }).join('; '),
                     ),
 
-                  if (proc.isNotEmpty) Text("• Procedure: $proc"),
+                  if (proc.isNotEmpty) Text('• ' + s.procedureLabel + ': ' + proc),
                 ],
               ),
             ),
@@ -167,14 +178,14 @@ class BookingRequestCard extends StatelessWidget {
                   icon: Icons.delete_outline,
                   color: Colors.redAccent,
                   shadow: false,
-                  tooltip: "Delete request",
+                  tooltip: s.deleteRequestTitle,
                   onTap: () async => onDelete(),
                 ),
                 AppIconPillButton(
                   icon: Icons.edit_outlined,
                   color: purple,
                   shadow: false,
-                  tooltip: "Edit request",
+                  tooltip: s.editRequest,
                   onTap: onEditRequest,
                 ),
               ],
