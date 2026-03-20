@@ -43,21 +43,21 @@ class AvailabilityService {
             .where((s) => s.trim().isNotEmpty)
             .toList() ?? const <String>[];
 
-    if (preferredDays.isEmpty) {
-      return (status: BookingRequestAvailability.unknown, nextStart: null);
-    }
+    final ranges  = extractRanges(br);
+    final durMin  = requestedDurationMin(br);
+    final allowed = allowedOverlapMin(durMin);
 
-    final ranges    = extractRanges(br);
-    final durMin    = requestedDurationMin(br);
-    final allowed   = allowedOverlapMin(durMin);
+    // No preferred days → scan next 30 days from today
+    final today = startOfDay(DateTime.now());
+    final daysToScan = preferredDays.isEmpty
+        ? List.generate(30, (i) => today.add(Duration(days: i)))
+        : (preferredDays
+            .map((k) => BookingRequestUtils.parseYyyymmdd(k))
+            .whereType<DateTime>()
+            .toList()
+          ..sort((a, b) => a.compareTo(b)));
 
-    final parsedDays = preferredDays
-        .map((k) => BookingRequestUtils.parseYyyymmdd(k))
-        .whereType<DateTime>()
-        .toList()
-      ..sort((a, b) => a.compareTo(b));
-
-    for (final day in parsedDays) {
+    for (final day in daysToScan) {
       final first = firstSlotOnDay(
         day: day, ranges: ranges, durMin: durMin,
         workerId: workerIdRaw, allowedOverlap: allowed, appts: appts,
@@ -84,22 +84,21 @@ class AvailabilityService {
             .where((s) => s.trim().isNotEmpty)
             .toList() ?? const <String>[];
 
-    if (preferredDays.isEmpty) {
-      return (status: BookingRequestAvailability.unknown, nextStart: null);
-    }
-
     final ranges  = extractRanges(br);
     final durMin  = requestedDurationMin(br);
     final allowed = allowedOverlapMin(durMin);
 
-    final parsedDays = preferredDays
-        .map((k) => BookingRequestUtils.parseYyyymmdd(k))
-        .whereType<DateTime>()
-        .toList()
-      ..sort((a, b) => a.compareTo(b));
+    final today = startOfDay(DateTime.now());
+    final daysToScan = preferredDays.isEmpty
+        ? List.generate(30, (i) => today.add(Duration(days: i)))
+        : (preferredDays
+            .map((k) => BookingRequestUtils.parseYyyymmdd(k))
+            .whereType<DateTime>()
+            .toList()
+          ..sort((a, b) => a.compareTo(b)));
 
     DateTime? best;
-    for (final day in parsedDays) {
+    for (final day in daysToScan) {
       for (final wid in workerIds) {
         final first = firstSlotOnDay(
           day: day, ranges: ranges, durMin: durMin,
@@ -145,13 +144,16 @@ class AvailabilityService {
         if (maxDay == null || dt.isAfter(maxDay)) maxDay = dt;
       }
     }
-    if (minDay == null || maxDay == null) return null;
+    // No preferred days → stream next 30 days
+    final today = startOfDay(DateTime.now());
+    final from  = minDay ?? today;
+    final to    = maxDay ?? today.add(const Duration(days: 30));
     return FirebaseFirestore.instance
         .collection('appointments')
         .where('appointmentDate',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay(minDay)))
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay(from)))
         .where('appointmentDate',
-            isLessThan: Timestamp.fromDate(endExclusive(maxDay)))
+            isLessThan: Timestamp.fromDate(endExclusive(to)))
         .snapshots();
   }
 

@@ -908,6 +908,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
 
               Widget buildCards(
                 List<QueryDocumentSnapshot<Map<String, dynamic>>> apptDocs,
+                List<String> workerIds,
               ) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -918,7 +919,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     const SizedBox(height: 8),
                     ...brDocs.map((d) {
                       final br   = d.data();
-                      final info = _avSvc.availabilityFor(br: br, appts: apptDocs);
+                      final wid  = (br['workerId'] ?? '').toString().trim();
+                      final info = wid.isEmpty
+                          ? _avSvc.availabilityForAnyWorker(
+                              br: br, workerIds: workerIds, appts: apptDocs)
+                          : _avSvc.availabilityFor(br: br, appts: apptDocs);
                       final lbl  = _avSvc.pillLabel(info.status, info.nextStart);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -962,16 +967,27 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 );
               }
 
-              if (apptStream == null) {
-                return buildCards(const []);
-              }
+              // Fetch worker IDs once for "any worker" requests
+              return FutureBuilder<List<String>>(
+                future: FirebaseFirestore.instance
+                    .collection('workers')
+                    .get()
+                    .then((s) => s.docs.map((d) => d.id).toList()),
+                builder: (_, workerSnap) {
+                  final workerIds = workerSnap.data ?? const [];
 
-              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: apptStream,
-                builder: (_, apptSnap) {
-                  final apptDocs = apptSnap.data?.docs ??
-                      const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-                  return buildCards(apptDocs);
+                  if (apptStream == null) {
+                    return buildCards(const [], workerIds);
+                  }
+
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: apptStream,
+                    builder: (_, apptSnap) {
+                      final apptDocs = apptSnap.data?.docs ??
+                          const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+                      return buildCards(apptDocs, workerIds);
+                    },
+                  );
                 },
               );
             },
