@@ -178,9 +178,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     TimeOfDay? initialStartTime,
     DateTime? selectedDayOverride,
   }) async {
+    final s = S.of(context);
     if (_services.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Services are still loading...')));
+        SnackBar(content: Text(s.servicesStillLoading)));
       return;
     }
     final day = selectedDayOverride ?? _selectedDay;
@@ -454,6 +455,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     required String? workerFilter,
     required UserProvider userProv,
   }) {
+    final s = S.of(context);
     final dateKey = _yyyymmdd(_selectedDay);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -529,7 +531,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             if (docs.isEmpty && blocked.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 24),
-                child: Text('No appointments for this day',
+                child: Text(s.noAppointmentsForDay,
                     style: TextStyle(color: Colors.grey[700])),
               );
             }
@@ -744,6 +746,7 @@ class _AdminAppointmentTile extends StatelessWidget {
     final dt         = _ts(data, 'appointmentDate');
     final durationMin = _i(data, 'durationMin');
     final safeDur    = durationMin <= 0 ? 0 : durationMin;
+    final s          = S.of(context);
 
     String fmt(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
@@ -756,8 +759,8 @@ class _AdminAppointmentTile extends StatelessWidget {
     final key        = _s(data, 'serviceNameKey', '');
     final serviceName = key.isNotEmpty
         ? trServiceOrAddon(context, key)
-        : _s(data, 'serviceName', 'Service');
-    final clientName = _s(data, 'clientName', 'Client');
+        : _s(data, 'serviceName', s.serviceFallback);
+    final clientName = _s(data, 'clientName', s.clientFallback);
 
     final ctry = data['clientCountry'];
     final ph   = data['clientPhone'];
@@ -850,8 +853,8 @@ class _AdminAppointmentTile extends StatelessWidget {
                             .withOpacity(0.22),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text('Pending confirmation',
-                          style: TextStyle(
+                      child: Text(s.pendingConfirmation,
+                          style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                               color: Colors.black87)),

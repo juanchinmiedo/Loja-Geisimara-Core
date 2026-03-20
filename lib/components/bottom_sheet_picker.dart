@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 class BottomSheetPicker {
   static Future<T?> showSearchable<T>({
@@ -9,6 +10,7 @@ class BottomSheetPicker {
     required Widget Function(T item)? trailingBuilder,
     T? selected,
   }) async {
+    final s = S.of(context);
     final ctrl = TextEditingController();
     return showModalBottomSheet<T>(
       context: context,
@@ -64,7 +66,7 @@ class BottomSheetPicker {
                       controller: ctrl,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        hintText: "Search...",
+                        hintText: s.searchEllipsis,
                         prefixIcon: const Icon(Icons.search),
                         isDense: true,
                         filled: true,

@@ -317,5 +317,6 @@
   "myStats": "My stats",
   "byProcedure": "By procedure",
   "procedures": "procedures",
-  "revenue": "revenue"
+  "revenue": "revenue",
+  "agoNow": "now"
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:provider/provider.dart';
 import 'package:salon_app/provider/booking_view_provider.dart';
 
@@ -9,6 +10,7 @@ class BookingViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final view = context.watch<BookingViewProvider>();
 
     return InkWell(
@@ -28,7 +30,7 @@ class BookingViewToggle extends StatelessWidget {
                 size: 18, color: kPurple),
             const SizedBox(width: 8),
             Text(
-              view.isWeek ? "Week" : "Day",
+              view.isWeek ? s.viewWeek : s.viewDay,
               style: const TextStyle(fontWeight: FontWeight.w900, color: kPurple),
             ),
           ],

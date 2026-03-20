@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/components/service_type_selectors.dart';
 
@@ -49,12 +50,13 @@ class BookingRequestCreateForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final servicesStream = FirebaseFirestore.instance.collection('services').snapshots();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Procedure", style: TextStyle(fontWeight: FontWeight.w900)),
+        Text(s.procedureLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
 
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -87,12 +89,12 @@ class BookingRequestCreateForm extends StatelessWidget {
 
         const SizedBox(height: 12),
 
-        const Text("Worker", style: TextStyle(fontWeight: FontWeight.w900)),
+        Text(s.worker, style: const TextStyle(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
         WorkerChoicePills(
           value: selectedWorkerId,
           onChanged: onWorkerChanged,
-          anyLabel: "Any",
+          anyLabel: s.any,
         ),
 
         const SizedBox(height: 12),
@@ -120,9 +122,9 @@ class BookingRequestCreateForm extends StatelessWidget {
               onCreate();
             },
             icon: const Icon(Icons.check, color: Colors.white),
-            label: const Text(
-              "Create request",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+            label: Text(
+              s.createRequest,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
             ),
           ),
         ),

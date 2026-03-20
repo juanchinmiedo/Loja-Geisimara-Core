@@ -2724,6 +2724,16 @@ class S {
       args: [],
     );
   }
+
+  /// `agora`
+  String get agoNow {
+    return Intl.message(
+      'agora',
+      name: 'agoNow',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

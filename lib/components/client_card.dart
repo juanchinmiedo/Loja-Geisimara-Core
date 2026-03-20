@@ -1,6 +1,7 @@
 // lib/components/client_card.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 class ClientCard extends StatelessWidget {
   const ClientCard({
@@ -163,6 +164,7 @@ class _NextApptPill extends StatelessWidget {
 class _SeekingBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -170,14 +172,14 @@ class _SeekingBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Colors.amber.withOpacity(0.45)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.notifications_active_outlined,
+          const Icon(Icons.notifications_active_outlined,
               size: 16, color: Colors.black87),
-          SizedBox(width: 6),
-          Text('Seeking',
-              style: TextStyle(
+          const SizedBox(width: 6),
+          Text(s.seeking,
+              style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
                   color: Colors.black87)),

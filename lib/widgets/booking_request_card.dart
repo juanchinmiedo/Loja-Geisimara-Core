@@ -41,7 +41,7 @@ class BookingRequestCard extends StatelessWidget {
     return "${DateTimeUtils.hhmmFromMinutes(sm)} - ${DateTimeUtils.hhmmFromMinutes(em)}";
   }
 
-  Widget _availabilityPill() {
+  Widget _availabilityPill(S s) {
     Color bg;
     Color border;
     Color text;
@@ -60,16 +60,16 @@ class BookingRequestCard extends StatelessWidget {
         bg = const Color(0xFFFCE8E6);
         border = const Color(0xFFEA4335);
         text = const Color(0xFFA50E0E);
-        label = (availabilityLabel ?? 'No availability').trim();
-        if (label.isEmpty) label = 'No availability';
+        label = (availabilityLabel ?? s.noAvailability).trim();
+        if (label.isEmpty) label = s.noAvailability;
         break;
 
       case BookingRequestAvailability.unknown:
         bg = Colors.black.withOpacity(0.05);
         border = Colors.black.withOpacity(0.12);
         text = Colors.black.withOpacity(0.70);
-        label = (availabilityLabel ?? 'Checking…').trim();
-        if (label.isEmpty) label = 'Checking…';
+        label = (availabilityLabel ?? s.checking).trim();
+        if (label.isEmpty) label = s.checking;
         break;
     }
 
@@ -144,7 +144,7 @@ class BookingRequestCard extends StatelessWidget {
                       Expanded(
                         child: Text(s.request, style: const TextStyle(fontWeight: FontWeight.w900)),
                       ),
-                      _availabilityPill(),
+                      _availabilityPill(s),
                     ],
                   ),
                   const SizedBox(height: 6),

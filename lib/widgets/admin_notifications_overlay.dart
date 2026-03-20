@@ -44,9 +44,9 @@ class AdminNotificationsOverlay extends StatelessWidget {
     );
   }
 
-  String _ago(DateTime dt) {
+  String _ago(S s, DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 1) return s.agoNow;
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
     return '${diff.inDays}d';
@@ -116,7 +116,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
                   return Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Error: ${snap.error}',
+                      s.errorWithValue(snap.error.toString()),
                       style: const TextStyle(color: Colors.red),
                     ),
                   );
@@ -141,7 +141,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
                     final d = docs[i];
                     final data = d.data();
 
-                    final title = (data['title'] ?? 'Notification').toString();
+                    final title = (data['title'] ?? s.notifications).toString();
                     final body = (data['body'] ?? '').toString();
                     final type = (data['type'] ?? '').toString();
                     final clientId = (data['clientId'] ?? '').toString();
@@ -239,7 +239,7 @@ class AdminNotificationsOverlay extends StatelessWidget {
                                         ),
                                         const SizedBox(width: 10),
                                         Text(
-                                          _ago(createdAt),
+                                          _ago(s, createdAt),
                                           style: TextStyle(
                                             color: Colors.grey[700],
                                             fontWeight: FontWeight.w700,

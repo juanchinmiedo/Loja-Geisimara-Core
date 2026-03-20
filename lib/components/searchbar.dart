@@ -1,16 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 class SearchBar extends StatelessWidget {
   const SearchBar({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 18),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             height: 50,
             width: 250,
             child: TextField(
@@ -18,16 +20,16 @@ class SearchBar extends StatelessWidget {
               textAlign: TextAlign.start,
               cursorHeight: 25,
               decoration: InputDecoration(
-                  prefixIcon: Icon(
+                  prefixIcon: const Icon(
                     Icons.search,
                     color: Colors.pink,
                   ),
                   fillColor: Colors.white,
                   filled: true,
-                  border: OutlineInputBorder(
+                  border: const OutlineInputBorder(
                     borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
-                  hintText: 'Search'),
+                  hintText: s.searchHint),
             ),
           ),
           const Spacer(),

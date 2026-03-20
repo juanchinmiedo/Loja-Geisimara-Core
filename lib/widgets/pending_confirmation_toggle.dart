@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/utils/pending_confirmation_utils.dart';
 
@@ -16,6 +17,7 @@ class PendingConfirmationToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: enabled ? () => onChanged(!value) : null,
@@ -54,15 +56,15 @@ class PendingConfirmationToggle extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Reservation (pending confirmation)',
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                  Text(
+                    s.reservationPending,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     value
-                        ? 'Client still needs to confirm this time.'
-                        : 'Time is confirmed.',
+                        ? s.pendingConfirmationMsg
+                        : s.timeIsConfirmed,
                     style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                   ),
                 ],
@@ -75,9 +77,9 @@ class PendingConfirmationToggle extends StatelessWidget {
                   color: PendingConfirmationUtils.pendingColor.withOpacity(0.25),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
-                  'PENDING',
-                  style: TextStyle(
+                child: Text(
+                  s.pendingConfirmationLabel,
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                     color: Colors.black87,

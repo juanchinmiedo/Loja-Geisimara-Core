@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
@@ -36,6 +37,7 @@ class BookingRequestPickersPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return LayoutBuilder(
       builder: (context, c) {
         final showIcons = c.maxWidth >= 340;
@@ -116,7 +118,7 @@ class BookingRequestPickersPills extends StatelessWidget {
               icon: Icons.schedule,
               color: purple,
               shadow: false,
-              tooltip: "Pick start time",
+              tooltip: s.pickStartTime,
               onTap: pickStart,
             );
           }
@@ -136,7 +138,7 @@ class BookingRequestPickersPills extends StatelessWidget {
               icon: Icons.alarm_on,
               color: purple,
               shadow: false,
-              tooltip: "Pick end time",
+              tooltip: s.pickEndTime,
               onTap: pickEnd,
             );
           }

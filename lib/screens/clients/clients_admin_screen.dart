@@ -219,7 +219,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
               // Header con search bar
               SliverToBoxAdapter(
                 child: AppGradientHeader(
-                  title: 'Clients',
+                  title: s.clientsTab,
                   subtitle: s.searchClientLabel,
                   child: Row(
                     children: [
@@ -231,7 +231,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.95),
                             prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search',
+                            hintText: s.searchHint,
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             contentPadding: const EdgeInsets.symmetric(
@@ -372,15 +372,13 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Expanded(child: Text('Create client',
-              style: TextStyle(fontWeight: FontWeight.w900))),
-          IconButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
-              icon: const Icon(Icons.close)),
+          Expanded(child: Text(s.createClient, style: const TextStyle(fontWeight: FontWeight.w900))),
+          IconButton(onPressed: _saving ? null : () => Navigator.pop(context), icon: const Icon(Icons.close)),
         ],
       ),
       content: Form(
@@ -390,37 +388,37 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(controller: _fnCtrl,
-                  decoration: const InputDecoration(labelText: 'First name',
-                      border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: s.firstNameLabel,
+                  border: const OutlineInputBorder()),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Required' : null),
+                  ? s.required : null),
               const SizedBox(height: 10),
               TextFormField(controller: _lnCtrl,
-                  decoration: const InputDecoration(labelText: 'Last name',
-                      border: OutlineInputBorder()),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Required' : null),
+                  decoration: InputDecoration(labelText: s.lastNameLabel,
+                  border: const OutlineInputBorder()),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 
+                  s.required : null),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(flex: 2, child: TextFormField(
                     controller: _countryCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Country code',
-                        border: OutlineInputBorder()))),
+                    decoration: InputDecoration(labelText: s.countryCode,
+                    border: const OutlineInputBorder()))),
                 const SizedBox(width: 10),
                 Expanded(flex: 4, child: TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Phone',
-                        border: OutlineInputBorder()))),
+                    decoration: InputDecoration(labelText: s.phoneLabel,
+                    border: const OutlineInputBorder()))),
               ]),
               const SizedBox(height: 10),
               TextFormField(controller: _igCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Instagram (optional)',
-                      border: OutlineInputBorder())),
+                  decoration: InputDecoration(
+                  labelText: s.instagramOptionalLabel,
+                  border: const OutlineInputBorder())),
               const SizedBox(height: 10),
-              Text('Phone OR Instagram required',
+              Text(s.phoneOrInstagramRequiredMsg,
                   style: TextStyle(color: Colors.grey[700], fontSize: 12)),
             ],
           ),
@@ -433,7 +431,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xff721c80),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+              borderRadius: BorderRadius.circular(14)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
             onPressed: _saving ? null : () async {
@@ -443,7 +441,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
               final ig   = widget.clientService.normalizeInstagram(_igCtrl.text);
               if (ctry == 0 && ph == 0 && ig.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Phone or Instagram required')));
+                  SnackBar(content: Text(s.phoneOrInstagramRequiredMsg)));
                 return;
               }
               setState(() => _saving = true);
@@ -458,7 +456,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 if (!mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Client created')));
+                    SnackBar(content: Text(s.clientCreated)));
               } finally {
                 if (mounted) setState(() => _saving = false);
               }
@@ -467,7 +465,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : const Text('Create', style: TextStyle(
+                : Text(s.create, style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w900)),
           ),
         ),

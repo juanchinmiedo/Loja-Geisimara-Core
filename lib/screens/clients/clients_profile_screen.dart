@@ -705,6 +705,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           final lastTs    = s['lastAppointmentAt']  as Timestamp?;
           final lastSum   = (s['lastAppointmentSummary'] ?? '').toString();
           return _statsContent(
+            context,
             requested: requested,
             attended: attended,
             cancelled: cancelled,
@@ -739,8 +740,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                   ts.toDate().isAfter(lastAttendedTs.toDate())) {
                 lastAttendedTs = ts;
                 lastAttendedSummary =
-                    (data['serviceName'] ?? data['serviceNameLabel'] ?? '')
-                        .toString();
+                  (data['serviceNameKey'] ?? data['serviceName'] ?? data['serviceNameLabel'] ?? '')
+                      .toString();
               }
             }
           } else if (status == 'cancelled') {
@@ -758,6 +759,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
             : (s['lastAppointmentSummary'] ?? '').toString();
 
         return _statsContent(
+          context,
           requested: requested,
           attended: attended,
           cancelled: cancelled,
@@ -769,7 +771,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     );
   }
 
-  Widget _statsContent({
+  Widget _statsContent(
+    BuildContext context, {
     required int requested,
     required int attended,
     required int cancelled,
@@ -777,6 +780,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
     required Timestamp? lastTs,
     required String lastSummary,
   }) {
+    final s = S.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -788,8 +792,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 DateTimeUtils.yyyymmdd(d));
             final time = DateTimeUtils.hhmmFromMinutes(d.hour * 60 + d.minute);
             return Text(
-              'Last attended appointment  ·  $date  ·  $time'
-              '${lastSummary.isNotEmpty ? "  ·  $lastSummary" : ""}',
+              '${s.statLastAppt}  ·  $date  ·  $time'
+              '${lastSummary.isNotEmpty ? "  ·  ${trServiceOrAddon(context, lastSummary)}" : ""}',
               style: TextStyle(
                   color: Colors.white.withOpacity(0.85),
                   fontSize: 11,
@@ -808,15 +812,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _sPill('Requested: $requested'),
+              _sPill('${s.statRequested}: $requested'),
               const SizedBox(width: 6),
-              _sPill('Attended: $attended',
+              _sPill('${s.statAttended}: $attended',
                   bg: Colors.green.withOpacity(0.45)),
               const SizedBox(width: 6),
-              _sPill('Cancelled: $cancelled',
+              _sPill('${s.statCancelled}: $cancelled',
                   bg: Colors.orange.withOpacity(0.45)),
               const SizedBox(width: 6),
-              _sPill('No-show: $noShow',
+              _sPill('${s.statNoShow}: $noShow',
                   bg: Colors.red.withOpacity(0.45)),
             ],
           ),

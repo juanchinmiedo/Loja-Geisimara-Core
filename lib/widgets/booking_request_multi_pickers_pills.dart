@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/components/ui/app_icon_value_pill_button.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 
 /// Multi-day + multi-range picker (simple y sin complicarnos).
-/// - "Add day" => añade a [selectedDays]
+/// - s.addDay => añade a [selectedDays]
 /// - "+ Add range" => añade a [selectedRanges] (startMin/endMin)
 ///
 /// Las pills son removibles.
@@ -32,6 +33,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     Widget pill({
       required String label,
       required VoidCallback onRemove,
@@ -73,7 +75,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
                   color: purple,
                   icon: Icons.calendar_month,
                   showIcon: showIcons,
-                  label: "Add day",
+                  label: s.addDay,
                   shadow: false,
                   onTap: onAddDay,
                 ),
@@ -81,7 +83,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
                   color: purple,
                   icon: Icons.schedule,
                   showIcon: true,
-                  label: "+ Add range",
+                  label: s.addRange,
                   shadow: false,
                   onTap: onAddRange,
                 ),
@@ -90,7 +92,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
             const SizedBox(height: 10),
 
             if (selectedDays.isNotEmpty) ...[
-              const Text("Days", style: TextStyle(fontWeight: FontWeight.w900)),
+              Text(s.days, style: const TextStyle(fontWeight: FontWeight.w900)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -106,7 +108,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
             ],
 
             if (selectedRanges.isNotEmpty) ...[
-              const Text("Ranges", style: TextStyle(fontWeight: FontWeight.w900)),
+              Text(s.ranges, style: const TextStyle(fontWeight: FontWeight.w900)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -127,7 +129,7 @@ class BookingRequestMultiPickersPills extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  "Tip: add one or more days, and optionally time ranges.",
+                  s.tipAddDays,
                   style: TextStyle(color: Colors.black.withOpacity(0.55)),
                 ),
               ),

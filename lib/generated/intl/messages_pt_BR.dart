@@ -71,6 +71,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "adminSchedule": MessageLookupByLibrary.simpleMessage("Agenda Admin"),
         "adminWorkerRole":
             MessageLookupByLibrary.simpleMessage("Admin + Trabalhadora"),
+        "agoNow": MessageLookupByLibrary.simpleMessage("agora"),
         "all": MessageLookupByLibrary.simpleMessage("Todos"),
         "any": MessageLookupByLibrary.simpleMessage("Qualquer"),
         "anyTime": MessageLookupByLibrary.simpleMessage("Qualquer hora"),
