@@ -20,6 +20,7 @@ import 'package:salon_app/screens/booking/block_slot_dialog.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/utils/date_labels.dart';
 import 'package:salon_app/utils/pending_confirmation_utils.dart';
+import 'package:salon_app/utils/localization_helper.dart';
 
 typedef TapAppt = void Function(String id, Map<String, dynamic> data);
 typedef TapEmpty = void Function(DateTime day, TimeOfDay tod);
@@ -519,7 +520,7 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
         endMin:      end.hour * 60 + end.minute,
         durationMin: safeDur,
         serviceId:   (data['serviceId']   ?? '').toString(),
-        serviceName: (data['serviceName'] ?? '').toString(),
+        serviceName: _resolveServiceName(context, data),
         clientName:  (data['clientName']  ?? 'Client').toString(),
       ));
     }
@@ -620,6 +621,13 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helpers internos (todos idénticos al original salvo _EmptyTapLayer)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+String _resolveServiceName(BuildContext context, Map<String, dynamic> data) {
+  final key = (data['serviceNameKey'] ?? '').toString().trim();
+  if (key.isNotEmpty) return trServiceOrAddon(context, key);
+  // Fallback: si no hay key (docs antiguos) usamos el nombre guardado
+  return (data['serviceName'] ?? '').toString();
+}
 
 class _Evt {
   _Evt({

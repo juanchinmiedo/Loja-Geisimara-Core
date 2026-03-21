@@ -1,10 +1,10 @@
 // lib/screens/booking/booking_admin.dart
 //
-// CAMBIOS vs versión anterior (commit 3):
-//  • _buildWeekView() pasa blockedSlotRepo y workerId a WeekCalendarView
-//  • _buildDayView() muestra franjas bloqueadas como banners negros
-//    en la lista, entre los appointments existentes
-//  • Todo lo demás (dialogs, lifecycle, day tile) idéntico
+// CAMBIOS (feature: open appointment from client profile):
+//  • Nuevo campo _autoOpenApptDone para evitar doble apertura.
+//  • didChangeDependencies() detecta pendingAppointmentOpen del provider,
+//    cambia la vista a week, ajusta _selectedDay y abre el diálogo correcto.
+//  • Todo lo demás idéntico.
 
 import 'dart:async';
 import 'package:salon_app/generated/l10n.dart';
@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/provider/booking_view_provider.dart';
+import 'package:salon_app/provider/admin_nav_provider.dart';
 
 import 'package:salon_app/components/pretty_date_strip.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
@@ -64,7 +65,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   bool _autoCreateOpened = false;
 
-  // ── Color helpers ────────────────────────────────────────────────────────────
+  // ── NEW: tracks whether we already handled the pending appointment open ──────
+  bool _autoOpenApptDone = false;
+
+  // ── Color helpers ─────────────────────────────────────────────────────────────
 
   Color _colorFromHex(String hex) {
     final clean = hex.replaceAll('#', '').trim();
@@ -81,7 +85,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     return out;
   }
 
-  // ── Week helpers ─────────────────────────────────────────────────────────────
+  // ── Week helpers ──────────────────────────────────────────────────────────────
 
   DateTime _startOfWeekMonday(DateTime d) {
     final x    = DateTime(d.year, d.month, d.day);
@@ -103,7 +107,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       '${d.month.toString().padLeft(2, '0')}'
       '${d.day.toString().padLeft(2, '0')}';
 
-  // ── Lifecycle ────────────────────────────────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -128,10 +132,54 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       if (!mounted) return;
       setState(() => _services = snap.docs);
       _tryAutoOpenCreateIfNeeded();
+      _tryHandlePendingAppointmentOpen();
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryAutoOpenCreateIfNeeded();
+      _tryHandlePendingAppointmentOpen();
+    });
+  }
+
+  void _tryHandlePendingAppointmentOpen() {
+    if (!mounted) return;
+    if (_autoOpenApptDone) return;
+    final nav = context.read<AdminNavProvider>();
+    final pending = nav.pendingAppointmentOpen;
+    if (pending == null) return;
+
+    _autoOpenApptDone = true;
+
+    // Switch to week view
+    context.read<BookingViewProvider>().setMode(BookingViewMode.week);
+
+    // Jump selected day to the appointment date
+    final apptDay = DateTime(
+      pending.appointmentDate.year,
+      pending.appointmentDate.month,
+      pending.appointmentDate.day,
+    );
+    setState(() => _selectedDay = apptDay);
+
+    // Clear before opening to avoid re-triggers
+    nav.clearPendingAppointmentOpen();
+
+    // Open on the next frame so the week view has rebuilt with the new day
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (pending.isPast) {
+        await _openPastAppointmentDialog(
+          appointmentId: pending.appointmentId,
+          data: pending.data,
+          selectedDayOverride: apptDay,
+        );
+      } else {
+        await _openEditAppointmentDialog(
+          appointmentId: pending.appointmentId,
+          data: pending.data,
+        );
+      }
+      if (mounted) _autoOpenApptDone = false;
     });
   }
 
@@ -155,7 +203,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     super.dispose();
   }
 
-  // ── Conflict helpers ─────────────────────────────────────────────────────────
+  // ── Conflict helpers ──────────────────────────────────────────────────────────
 
   int _minutesOverlap(
       DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) {
@@ -171,7 +219,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     return Colors.red;
   }
 
-  // ── Dialog openers ───────────────────────────────────────────────────────────
+  // ── Dialog openers ────────────────────────────────────────────────────────────
 
   Future<void> _openCreateAppointmentDialog({
     String? preselectedClientId,
@@ -234,9 +282,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
-@override
+  @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final dayStart  = Timestamp.fromDate(_startOfDay(_selectedDay));

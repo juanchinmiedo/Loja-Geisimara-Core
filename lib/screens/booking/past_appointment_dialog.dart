@@ -43,6 +43,8 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
   String? selectedServiceId;
   Map<String, dynamic>? selectedServiceData;
 
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _localServices = [];
+
   // types subcolección
   List<Map<String, dynamic>> serviceTypes = const [];
   bool loadingTypes = false;
@@ -93,6 +95,11 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureServiceLoaded(); // ← fetch directo si widget.services estaba vacío
+      if (widget.services.isEmpty) {
+        final snap = await FirebaseFirestore.instance.collection('services').limit(100).get();
+        if (mounted) setState(() => _localServices = snap.docs);
+      }
       await _loadTypesForSelectedService(autoPickCommon: false);
       _autoPickExistingOrCommonType();
       if (mounted) setState(() {});
@@ -451,7 +458,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
                 // Selector servicio/tipo (editable)
                 ServiceTypeSelectors(
-                  services: widget.services,
+                  services: _localServices.isNotEmpty ? _localServices : widget.services,
                   selectedServiceId: selectedServiceId,
                   selectedServiceData: selectedServiceData,
                   onPickService: (serviceId, serviceData) async {

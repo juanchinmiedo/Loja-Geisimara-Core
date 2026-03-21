@@ -598,7 +598,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   }
 
 
-  Widget _apptCard(Map<String, dynamic> d, {bool isPast = false}) {
+  Widget _apptCard(String appointmentId, Map<String, dynamic> d, {bool isPast = false}) {
     final ts         = d['appointmentDate'];
     final date       = ts is Timestamp ? ts.toDate() : null;
     final dateStr    = date != null
@@ -627,44 +627,60 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
       'noShow':         Colors.red,
     }[displayStatus] ?? Colors.grey;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.05),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        onTap: date == null ? null : () {
+          context.read<AdminNavProvider>().goToBookingAndOpenAppointment(
+            appointmentId: appointmentId,
+            data: d,
+            appointmentDate: date,
+            isPast: isPast,
+          );
+          Navigator.pop(context);
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.black12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
-                Text(service.isNotEmpty ? service : '—',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 3),
-                Text('$dateStr${timeStr.isNotEmpty ? "  ·  $timeStr" : ""}',
-                    style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                if (workerName.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(workerName,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(service.isNotEmpty ? service : '—',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Text('$dateStr${timeStr.isNotEmpty ? "  ·  $timeStr" : ""}',
+                          style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                      if (workerName.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(workerName,
+                            style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                      ],
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(statusLabel,
+                      style: TextStyle(color: statusColor,
+                          fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(statusLabel,
-                style: TextStyle(color: statusColor,
-                    fontWeight: FontWeight.w700, fontSize: 12)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1015,7 +1031,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     style: TextStyle(color: Colors.grey[700]));
               }
               return Column(
-                  children: docs.map((d) => _apptCard(d.data())).toList());
+                  children: docs.map((d) => _apptCard(d.id, d.data())).toList());
             },
           ),
         ],
@@ -1046,7 +1062,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: docs.length,
-          itemBuilder: (_, i) => _apptCard(docs[i].data(), isPast: true),
+          itemBuilder: (_, i) => _apptCard(docs[i].id, docs[i].data(), isPast: true),
         );
       },
     );
