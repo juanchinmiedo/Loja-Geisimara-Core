@@ -1,6 +1,7 @@
 // lib/services/client_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/utils/string_utils.dart';
 
 class ClientService {
@@ -288,12 +289,12 @@ class ClientService {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx, _DuplicateDecision.useExisting(selectedIndex)),
-                  child: const Text("Use existing"),
+                  child: Text(S.of(ctx).useExisting),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
                   onPressed: () => Navigator.pop(dialogCtx, _DuplicateDecision.createAnyway),
-                  child: const Text("Create anyway", style: TextStyle(color: Colors.white)),
+                  child: Text(S.of(ctx).createAnyway, style: const TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -332,11 +333,11 @@ class ClientService {
     if (nameHits.isNotEmpty) {
       final res = await _showDuplicatesPicker(
         context: context,
-        title: "Name already exists",
-        message: "There are clients with the same first name and last name.\nCheck below to avoid duplicates.",
+        title: S.of(context).nameAlreadyExists,
+        message: S.of(context).nameAlreadyExistsMsg,
         hits: nameHits,
-        primaryButtonText: "Create anyway",
-        secondaryButtonText: "Go back",
+        primaryButtonText: S.of(context).createAnyway,
+        secondaryButtonText: S.of(context).goBack,
         primaryColor: Colors.amber,
       );
 
@@ -360,8 +361,8 @@ class ClientService {
     if (contactHits.isNotEmpty) {
       final decision = await _showPhoneIgDecisionDialog(
         context: context,
-        title: "Phone/Instagram already exists",
-        message: "This contact is already used by:",
+        title: S.of(context).contactAlreadyExists,
+        message: S.of(context).contactAlreadyUsedBy,
         hits: contactHits,
       );
 

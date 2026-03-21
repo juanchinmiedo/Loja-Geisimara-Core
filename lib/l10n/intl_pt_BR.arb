@@ -318,5 +318,24 @@
   "byProcedure": "Por procedimento",
   "procedures": "procedimentos",
   "revenue": "receita",
-  "agoNow": "agora"
+  "agoNow": "agora",
+  "timeConflict": "Conflito de horário",
+  "timeConflictDetail": "Este agendamento sobrepõe outro em {minutes} min.\n\nGuardar mesmo assim ou mudar horário?",
+  "changeTime": "Mudar horário",
+  "saveAnyway": "Guardar mesmo assim",
+  "saveAnywayOrChangeTime": "Guardar mesmo assim ou mudar horário?",
+  "nameAlreadyExists": "Nome já existe",
+  "nameAlreadyExistsMsg": "Já existem clientes com o mesmo nome.\nVerifica abaixo para evitar duplicados.",
+  "createAnyway": "Criar mesmo assim",
+  "goBack": "Voltar",
+  "contactAlreadyExists": "Contacto já existe",
+  "contactAlreadyUsedBy": "Este contacto já está a ser usado por:",
+  "useExisting": "Usar existente",
+  "@timeConflictDetail": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }

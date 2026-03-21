@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 import 'package:provider/provider.dart';
 
 import 'package:salon_app/provider/user_provider.dart';
@@ -71,6 +72,7 @@ class _WorkerSelectorPillsState extends State<WorkerSelectorPills> {
 
   @override
   Widget build(BuildContext context) {
+    final s  = S.of(context);
     final up = context.watch<UserProvider>();
     if (!up.isAdmin) return const SizedBox.shrink();
 
@@ -101,7 +103,7 @@ class _WorkerSelectorPillsState extends State<WorkerSelectorPills> {
         // ✅ Pills: ALL primero, luego worker seleccionado (si existe), luego el resto
         final pills = <Widget>[
           _pillBase(
-            label: widget.allLabel,
+            label: s.all,
             active: selected == null,
             onTap: () => up.setWorkerFilter(null),
           ),

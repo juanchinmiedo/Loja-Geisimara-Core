@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:salon_app/generated/l10n.dart';
 
 class ConflictService {
   ConflictService(this._db);
@@ -70,24 +71,30 @@ class ConflictService {
     final res = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text("Time conflict"),
-        content: Text(
-          "This appointment overlaps another by $maxOverlapMin min.\n\n"
-          "Save anyway or change time?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(_, false),
-            child: const Text("Change time"),
+      builder: (ctx) {
+        final s = S.of(ctx);
+        return AlertDialog(
+          title: Text(s.timeConflict),
+          content: Text(
+            s.timeConflictDetail(maxOverlapMin),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: color),
-            onPressed: () => Navigator.pop(_, true),
-            child: const Text("Save anyway", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+          // Wrap in OverflowBar so buttons stay on one line and shrink if needed
+          actionsOverflowButtonSpacing: 8,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: FittedBox(child: Text(s.changeTime)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: color),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: FittedBox(
+                child: Text(s.saveAnyway, style: const TextStyle(color: Colors.white))
+              ),
+            ),
+          ],
+        );
+      },
     );
 
     return res == true;

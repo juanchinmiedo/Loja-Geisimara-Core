@@ -318,5 +318,24 @@
   "byProcedure": "By procedure",
   "procedures": "procedures",
   "revenue": "revenue",
-  "agoNow": "now"
+  "agoNow": "now",
+  "timeConflict": "Time conflict",
+  "timeConflictDetail": "This appointment overlaps another by {minutes} min.\n\nSave anyway or change time?",
+  "changeTime": "Change time",
+  "saveAnyway": "Save anyway",
+  "saveAnywayOrChangeTime": "Save anyway or change time?",
+  "nameAlreadyExists": "Name already exists",
+  "nameAlreadyExistsMsg": "There are clients with the same name.\nCheck below to avoid duplicates.",
+  "createAnyway": "Create anyway",
+  "goBack": "Go back",
+  "contactAlreadyExists": "Contact already exists",
+  "contactAlreadyUsedBy": "This contact is already used by:",
+  "useExisting": "Use existing",
+  "@timeConflictDetail": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }

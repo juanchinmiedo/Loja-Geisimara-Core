@@ -318,5 +318,24 @@
   "byProcedure": "Por procedimiento",
   "procedures": "procedimientos",
   "revenue": "ingresos",
-  "agoNow": "ahora"
+  "agoNow": "ahora",
+  "timeConflict": "Conflicto de horario",
+  "timeConflictDetail": "Esta cita se solapa con otra por {minutes} min.\n\n¿Guardar de todas formas o cambiar hora?",
+  "changeTime": "Cambiar hora",
+  "saveAnyway": "Guardar de todas formas",
+  "saveAnywayOrChangeTime": "¿Guardar de todas formas o cambiar hora?",
+  "nameAlreadyExists": "Nombre ya existe",
+  "nameAlreadyExistsMsg": "Ya hay clientes con el mismo nombre.\nComprueba abajo para evitar duplicados.",
+  "createAnyway": "Crear de todas formas",
+  "goBack": "Volver",
+  "contactAlreadyExists": "Contacto ya existe",
+  "contactAlreadyUsedBy": "Este contacto ya está siendo usado por:",
+  "useExisting": "Usar existente",
+  "@timeConflictDetail": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }

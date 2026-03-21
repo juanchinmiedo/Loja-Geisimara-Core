@@ -2734,6 +2734,126 @@ class S {
       args: [],
     );
   }
+
+  /// `Conflito de horário`
+  String get timeConflict {
+    return Intl.message(
+      'Conflito de horário',
+      name: 'timeConflict',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Este agendamento sobrepõe outro em {minutes} min.\n\nGuardar mesmo assim ou mudar horário?`
+  String timeConflictDetail(int minutes) {
+    return Intl.message(
+      'Este agendamento sobrepõe outro em $minutes min.\n\nGuardar mesmo assim ou mudar horário?',
+      name: 'timeConflictDetail',
+      desc: '',
+      args: [minutes],
+    );
+  }
+
+  /// `Mudar horário`
+  String get changeTime {
+    return Intl.message(
+      'Mudar horário',
+      name: 'changeTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Guardar mesmo assim`
+  String get saveAnyway {
+    return Intl.message(
+      'Guardar mesmo assim',
+      name: 'saveAnyway',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Guardar mesmo assim ou mudar horário?`
+  String get saveAnywayOrChangeTime {
+    return Intl.message(
+      'Guardar mesmo assim ou mudar horário?',
+      name: 'saveAnywayOrChangeTime',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Nome já existe`
+  String get nameAlreadyExists {
+    return Intl.message(
+      'Nome já existe',
+      name: 'nameAlreadyExists',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Já existem clientes com o mesmo nome.\nVerifica abaixo para evitar duplicados.`
+  String get nameAlreadyExistsMsg {
+    return Intl.message(
+      'Já existem clientes com o mesmo nome.\nVerifica abaixo para evitar duplicados.',
+      name: 'nameAlreadyExistsMsg',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Criar mesmo assim`
+  String get createAnyway {
+    return Intl.message(
+      'Criar mesmo assim',
+      name: 'createAnyway',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Voltar`
+  String get goBack {
+    return Intl.message(
+      'Voltar',
+      name: 'goBack',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Contacto já existe`
+  String get contactAlreadyExists {
+    return Intl.message(
+      'Contacto já existe',
+      name: 'contactAlreadyExists',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Este contacto já está a ser usado por:`
+  String get contactAlreadyUsedBy {
+    return Intl.message(
+      'Este contacto já está a ser usado por:',
+      name: 'contactAlreadyUsedBy',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Usar existente`
+  String get useExisting {
+    return Intl.message(
+      'Usar existente',
+      name: 'useExisting',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

@@ -37,7 +37,10 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m7(dur) => "Range must be at least ${dur} min";
 
-  static String m8(minutes) => "Time: ${minutes}m";
+  static String m8(minutes) =>
+      "This appointment overlaps another by ${minutes} min.\n\nSave anyway or change time?";
+
+  static String m9(minutes) => "Time: ${minutes}m";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -100,6 +103,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "byProcedure": MessageLookupByLibrary.simpleMessage("By procedure"),
         "cancel": MessageLookupByLibrary.simpleMessage("Cancel"),
         "category": MessageLookupByLibrary.simpleMessage("Category"),
+        "changeTime": MessageLookupByLibrary.simpleMessage("Change time"),
         "checking": MessageLookupByLibrary.simpleMessage("Checking…"),
         "clientCancelledAppointment": MessageLookupByLibrary.simpleMessage(
             "Client cancelled the appointment"),
@@ -118,6 +122,10 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("Confirm booking"),
         "console_firebase_database": MessageLookupByLibrary.simpleMessage(
             "Esto es un comentario sobre el lugar de donde vienen estos textos para editarlos correctamente"),
+        "contactAlreadyExists":
+            MessageLookupByLibrary.simpleMessage("Contact already exists"),
+        "contactAlreadyUsedBy": MessageLookupByLibrary.simpleMessage(
+            "This contact is already used by:"),
         "continueAsGuest":
             MessageLookupByLibrary.simpleMessage("Continue as guest"),
         "continueWithGoogle":
@@ -125,6 +133,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "countryCode": MessageLookupByLibrary.simpleMessage("Country code"),
         "countryLabel": MessageLookupByLibrary.simpleMessage("Country"),
         "create": MessageLookupByLibrary.simpleMessage("Create"),
+        "createAnyway": MessageLookupByLibrary.simpleMessage("Create anyway"),
         "createAppointmentTitle":
             MessageLookupByLibrary.simpleMessage("Create appointment"),
         "createClient": MessageLookupByLibrary.simpleMessage("Create client"),
@@ -185,6 +194,7 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("Gel Varnish Reinforcement"),
         "gelVarnishPedicure":
             MessageLookupByLibrary.simpleMessage("Gel Varnish Pedicure"),
+        "goBack": MessageLookupByLibrary.simpleMessage("Go back"),
         "googleLoginSuccess":
             MessageLookupByLibrary.simpleMessage("Google login successful"),
         "guest": MessageLookupByLibrary.simpleMessage("Guest"),
@@ -243,6 +253,10 @@ class MessageLookup extends MessageLookupByLibrary {
         "nailRecomposition":
             MessageLookupByLibrary.simpleMessage("Nail Recomposition"),
         "nailRemove": MessageLookupByLibrary.simpleMessage("Nail Removal"),
+        "nameAlreadyExists":
+            MessageLookupByLibrary.simpleMessage("Name already exists"),
+        "nameAlreadyExistsMsg": MessageLookupByLibrary.simpleMessage(
+            "There are clients with the same name.\nCheck below to avoid duplicates."),
         "newAppointment":
             MessageLookupByLibrary.simpleMessage("New appointment"),
         "newBookingRequest":
@@ -331,6 +345,9 @@ class MessageLookup extends MessageLookupByLibrary {
         "revenue": MessageLookupByLibrary.simpleMessage("revenue"),
         "roles": MessageLookupByLibrary.simpleMessage("Roles"),
         "save": MessageLookupByLibrary.simpleMessage("Save"),
+        "saveAnyway": MessageLookupByLibrary.simpleMessage("Save anyway"),
+        "saveAnywayOrChangeTime":
+            MessageLookupByLibrary.simpleMessage("Save anyway or change time?"),
         "saveClient": MessageLookupByLibrary.simpleMessage("Save client"),
         "schedule": MessageLookupByLibrary.simpleMessage("Schedule"),
         "searchClientLabel": MessageLookupByLibrary.simpleMessage(
@@ -386,10 +403,12 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("Tap to open client"),
         "tapToViewProfile":
             MessageLookupByLibrary.simpleMessage("Tap to view profile"),
+        "timeConflict": MessageLookupByLibrary.simpleMessage("Time conflict"),
+        "timeConflictDetail": m8,
         "timeIsConfirmed":
             MessageLookupByLibrary.simpleMessage("Time is confirmed."),
         "timeMinutesEmpty": MessageLookupByLibrary.simpleMessage("Time: —"),
-        "timeMinutesLabel": m8,
+        "timeMinutesLabel": m9,
         "timeRequired":
             MessageLookupByLibrary.simpleMessage("Time is required"),
         "tipAddDays": MessageLookupByLibrary.simpleMessage(
@@ -403,6 +422,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "upcoming": MessageLookupByLibrary.simpleMessage("Upcoming"),
         "upcomingAppointments":
             MessageLookupByLibrary.simpleMessage("Upcoming appointments"),
+        "useExisting": MessageLookupByLibrary.simpleMessage("Use existing"),
         "userRole": MessageLookupByLibrary.simpleMessage("User"),
         "viewDay": MessageLookupByLibrary.simpleMessage("Day"),
         "viewProfileAndCatalog":
