@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,7 @@ import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
 import 'package:salon_app/utils/business_hours_utils.dart';
+import 'package:salon_app/services/audit_service.dart';
 import 'package:salon_app/utils/keyboard_utils.dart';
 import 'package:salon_app/utils/pending_confirmation_utils.dart';
 import 'package:salon_app/utils/service_types_utils.dart';
@@ -1006,6 +1008,19 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                             appointmentDate: dt,
                             lastSummary: translatedName,
                           );
+
+                          // ── Audit log ─────────────────────────────────────
+                          unawaited(AuditService().logAppointmentCreated(
+                            appointmentId: apptRef.id,
+                            clientId: clientId,
+                            clientName: clientName,
+                            serviceName: translatedName,
+                            serviceNameKey: svcNameKey,
+                            appointmentDate: dt,
+                            workerId: workerId,
+                            total: basePrice,
+                            performerWorkerId: userProv.workerId,
+                          ));
 
                           // ✅ NEW: borrar requests SOLO si cumplen TODOS los requisitos.
                           // Si hay requests (misma category) que NO cumplen, pedimos confirmación.

@@ -9,6 +9,7 @@
 //  3. Stats: sin container, pills directamente sobre el gradiente,
 //     "Last appointment" arriba, 4 pills en una sola línea responsive (FittedBox).
 
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +19,7 @@ import 'package:salon_app/components/ui/app_icon_pill_button.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
+import 'package:salon_app/services/audit_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/services/availability_service.dart';
@@ -254,6 +256,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
       _brWorkerId = null; _brServiceId = null;
       _brServiceData = null; _brDurationMin = 30;
     });
+    // ── Audit log ─────────────────────────────────────────────────────────────
+    unawaited(AuditService().logBookingRequestCreated(
+      requestId: widget.clientId,
+      clientId: widget.clientId,
+      clientName: _fullName(),
+      serviceNameKey: nameKey,
+    ));
+
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(s.bookingRequestCreated)));
@@ -327,6 +337,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                         'updatedAt': FieldValue.serverTimestamp(),
                       }, SetOptions(merge: true));
                       if (!ctx.mounted) return;
+                      // ── Audit log ─────────────────────────────────────
+                      unawaited(AuditService().logClientEdited(
+                        clientId: widget.clientId,
+                        clientName: _fullName(),
+                      ));
+
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(s.clientUpdated)));
@@ -493,6 +509,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                   preferredTimeRanges: List<Map<String, int>>.from(rangeList),
                 );
                 if (!mounted) return;
+                // ── Audit log ───────────────────────────────────────
+                unawaited(AuditService().logBookingRequestEdited(
+                  requestId: requestId,
+                  clientName: _fullName(),
+                  serviceNameKey: nameKey,
+                ));
+
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(s.requestUpdated)));
@@ -973,6 +996,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                             );
                             if (ok != true) return;
                             await _brRepo.deleteRequest(d.id);
+
+                            // ── Audit log ─────────────────────────────────
+                            unawaited(AuditService().logBookingRequestDeleted(
+                              requestId: d.id,
+                              clientName: _fullName(),
+                            ));
                           },
                           onEditRequest: () =>
                               _editRequestSheet(requestId: d.id, br: br),
@@ -1141,6 +1170,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                   ),
                 );
                 if (ok != true) return;
+                // ── Audit log ───────────────────────────────────────────
+                unawaited(AuditService().logClientDeleted(
+                  clientId: widget.clientId,
+                  clientName: _fullName(),
+                ));
+
                 await FirebaseFirestore.instance
                     .collection('clients').doc(widget.clientId).delete();
                 if (!mounted) return;

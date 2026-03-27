@@ -1,12 +1,6 @@
 // lib/screens/clients/clients_admin_screen.dart
-//
-// Perf(commit 9): batch prefetch next appointments
-//  • En lugar de 1 query por card visible (FutureBuilder individual),
-//    se hace 1 sola query para todos los IDs visibles en pantalla a la vez.
-//  • _prefetchNextAppts(ids) carga los próximos appointments de todos los
-//    clientes de una lista en una sola roundtrip a Firestore.
-//  • El cache sigue existiendo para no repetir queries en rebuilds.
 
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +14,9 @@ import 'package:salon_app/screens/clients/clients_profile_screen.dart';
 import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 import 'package:salon_app/provider/locale_provider.dart';
+import 'package:salon_app/services/audit_service.dart';
+import 'package:salon_app/provider/user_provider.dart';
+import 'package:salon_app/components/ui/header_action_button.dart';
 
 class ClientsAdminScreen extends StatefulWidget {
   const ClientsAdminScreen({super.key});
@@ -29,13 +26,12 @@ class ClientsAdminScreen extends StatefulWidget {
 }
 
 class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
+  static const _purple = Color(0xff721c80);
+
   final _searchCtrl = TextEditingController();
   late final ClientService _clientService;
 
-  // Cache clientId → label ('' = sin turno próximo)
-  // Se llena en lote al cargar la lista — 1 query para todos los IDs visibles.
   final Map<String, String> _nextApptCache = {};
-  // IDs ya prefetcheados (evita repetir la query batch en cada rebuild)
   final Set<String> _prefetchedIds = {};
 
   Locale? _lastLocale;
@@ -63,15 +59,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     super.dispose();
   }
 
-  // ── Next appointment — batch prefetch ────────────────────────────────────────
-  //
-  // En lugar de 1 query por card (el patrón anterior), cargamos los próximos
-  // appointments de TODOS los clientIds visibles en una sola query usando
-  // whereIn. Firestore permite hasta 30 IDs por whereIn.
-  //
-  // Se llama una vez cuando el StreamBuilder recibe datos nuevos.
-  // El cache evita repetir la query en rebuilds posteriores.
-
   String _formatApptLabel(DateTime dt, S s) {
     final wd = [s.weekdayMon, s.weekdayTue, s.weekdayWed, s.weekdayThu,
                 s.weekdayFri, s.weekdaySat, s.weekdaySun];
@@ -81,16 +68,13 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   }
 
   Future<void> _prefetchNextAppts(List<String> clientIds, S s) async {
-    // Solo los IDs que no están en cache todavía
     final missing = clientIds
         .where((id) => !_prefetchedIds.contains(id))
         .toList();
     if (missing.isEmpty) return;
 
-    // Marcar como prefetcheados antes de la query (evita doble-fetch en rapid rebuilds)
     _prefetchedIds.addAll(missing);
 
-    // Firestore whereIn: max 30 por chunk
     const chunkSize = 30;
     for (int i = 0; i < missing.length; i += chunkSize) {
       final chunk = missing.sublist(i, (i + chunkSize).clamp(0, missing.length));
@@ -101,12 +85,10 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
             .where('status', isEqualTo: 'scheduled')
             .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.now())
             .orderBy('appointmentDate')
-            .limit(chunk.length * 2) // max 2 upcoming per client in one query
+            .limit(chunk.length * 2)
             .get();
 
-        // Para cada clientId del chunk, queda el appointment más próximo
         final Map<String, DateTime> earliest = {};
-        final Map<String, String> services = {};
         for (final doc in snap.docs) {
           final data     = doc.data();
           final clientId = (data['clientId'] ?? '').toString();
@@ -119,7 +101,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
           }
         }
 
-        // Poblar cache
         for (final id in chunk) {
           if (earliest.containsKey(id)) {
             _nextApptCache[id] = _formatApptLabel(earliest[id]!, s);
@@ -130,7 +111,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
 
         if (mounted) setState(() {});
       } catch (_) {
-        // Si falla un chunk, dejamos los IDs sin label (se muestran sin pill)
         for (final id in chunk) {
           _nextApptCache.putIfAbsent(id, () => '');
         }
@@ -138,15 +118,12 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
     }
   }
 
-  // ── Navigation ────────────────────────────────────────────────────────────────
-
   void _openClientProfile(String clientId) {
     Navigator.push(
       context,
       MaterialPageRoute(
           builder: (_) => ClientProfileScreen(clientId: clientId)),
     ).then((_) {
-      // Invalida cache de este cliente al volver (puede haber cambiado)
       _nextApptCache.remove(clientId);
       _prefetchedIds.remove(clientId);
       if (mounted) setState(() {});
@@ -158,6 +135,93 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _CreateClientDialog(clientService: _clientService),
+    );
+  }
+
+  // ── Add client button — mismo estilo que la campana de home ──────────────────
+
+  Widget _buildAddClientButton() {
+    return HeaderActionButton(
+      icon: Icons.person_add_alt_1_rounded,
+      onTap: _openCreateClientDialog,
+    );
+  }
+
+  // ── Header child: buscador + stats ────────────────────────────────────────────
+
+  Widget _buildHeaderChild(S s, List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final total    = docs.length;
+    final looking  = docs.where((d) => d.data()['bookingRequestActive'] == true).length;
+    final withAppt = _nextApptCache.values.where((v) => v.isNotEmpty).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Buscador + botón add (alineados)
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.95),
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: s.searchHint,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _buildAddClientButton(),
+          ],
+        ),
+
+        // Stats pills
+        if (total > 0) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _statPill(Icons.people_alt_outlined, '$total', Colors.white),
+              const SizedBox(width: 8),
+              _statPill(Icons.notifications_active_outlined, '$looking', Colors.white),
+              const SizedBox(width: 8),
+              _statPill(Icons.event_available_outlined, '$withAppt', Colors.white),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _statPill(IconData icon, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color.withOpacity(0.85)),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            style: TextStyle(
+              color: color.withOpacity(0.95),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -176,12 +240,10 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
       }
     });
 
-    // Limit 100: carga inicial rápida. Con búsqueda activa se filtra en memoria.
-    // Si se necesitan más clientes, aumentar el límite o implementar cursor pagination.
     final stream = FirebaseFirestore.instance
         .collection('clients')
         .orderBy('updatedAt', descending: true)
-        .limit(100)
+        .limit(250)
         .snapshots();
 
     return Scaffold(
@@ -206,71 +268,20 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
             return bv.compareTo(av);
           });
 
-          // Dispara el batch prefetch para todos los IDs de la lista filtrada.
-          // unawaited — no bloquea el build. El setState() dentro de
-          // _prefetchNextAppts actualiza las pills cuando llegan los datos.
           final idsToFetch = filtered.map((d) => d.id).toList();
           Future.microtask(() => _prefetchNextAppts(idsToFetch, s));
 
-          // CustomScrollView: header fijo + lista virtualizada (solo renderiza
-          // los items visibles en pantalla, no los 100 de golpe)
           return CustomScrollView(
             slivers: [
-              // Header con search bar
               SliverToBoxAdapter(
                 child: AppGradientHeader(
                   title: s.clientsTab,
-                  subtitle: s.searchClientLabel,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchCtrl,
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.95),
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: s.searchHint,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 14),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        height: 44,
-                        width: 44,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: _openCreateClientDialog,
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.22),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                    color: Colors.black.withOpacity(0.35)),
-                              ),
-                              child: const Center(
-                                child: Icon(Icons.person_add_alt_1_rounded,
-                                    color: Color(0xff721c80), size: 22),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  height: 195,
+                  child: _buildHeaderChild(s, docs),
                 ),
               ),
 
-              // Loading / error / empty
-              if (snap.connectionState == ConnectionState.waiting &&
-                  docs.isEmpty)
+              if (snap.connectionState == ConnectionState.waiting && docs.isEmpty)
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.only(top: 32),
@@ -295,8 +306,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                   ),
                 )
               else
-                // SliverList virtualizado. El prefetch batch ya pobló el cache
-                // antes de llegar aquí (se dispara en el StreamBuilder builder).
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
                   sliver: SliverList.builder(
@@ -305,7 +314,6 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                       final d      = filtered[i];
                       final data   = d.data();
                       final hasReq = data['bookingRequestActive'] == true;
-                      // Lee del cache directamente — sin FutureBuilder individual
                       final nextLabel = _nextApptCache[d.id];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -318,14 +326,12 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
                                   : null,
                           trailingBeforeChevron: hasReq
                               ? AppPill(
-                                  background: const Color(0xff721c80)
-                                      .withOpacity(0.10),
-                                  borderColor: const Color(0xff721c80)
-                                      .withOpacity(0.25),
+                                  background: _purple.withOpacity(0.10),
+                                  borderColor: _purple.withOpacity(0.25),
                                   child: const Icon(
                                       Icons.notifications_active_outlined,
                                       size: 16,
-                                      color: Color(0xff721c80)),
+                                      color: _purple),
                                 )
                               : null,
                           onTap: () => _openClientProfile(d.id),
@@ -342,7 +348,7 @@ class _ClientsAdminScreenState extends State<ClientsAdminScreen> {
   }
 }
 
-// ── Create client dialog (sin cambios) ───────────────────────────────────────
+// ── Create client dialog ──────────────────────────────────────────────────────
 
 class _CreateClientDialog extends StatefulWidget {
   const _CreateClientDialog({required this.clientService});
@@ -396,7 +402,7 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
               TextFormField(controller: _lnCtrl,
                   decoration: InputDecoration(labelText: s.lastNameLabel,
                   border: const OutlineInputBorder()),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 
+                  validator: (v) => (v == null || v.trim().isEmpty) ?
                   s.required : null),
               const SizedBox(height: 10),
               Row(children: [
@@ -454,6 +460,16 @@ class _CreateClientDialogState extends State<_CreateClientDialog> {
                   instagramRaw: _igCtrl.text,
                 );
                 if (!mounted) return;
+
+                // ── Audit log ─────────────────────────────────────────────
+                final _name = '\${_fnCtrl.text.trim()} \${_lnCtrl.text.trim()}'.trim();
+                final _wid  = context.read<UserProvider>().workerId;
+                unawaited(AuditService().logClientCreated(
+                  clientId: '',
+                  clientName: _name,
+                  performerWorkerId: _wid,
+                ));
+
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(s.clientCreated)));

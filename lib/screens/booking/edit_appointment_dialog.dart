@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +20,7 @@ import 'package:salon_app/components/service_type_selectors.dart';
 
 // ✅ NEW
 import 'package:salon_app/services/appointment_service.dart';
+import 'package:salon_app/services/audit_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 
@@ -55,8 +57,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
   String? selectedServiceId;
   Map<String, dynamic>? selectedServiceData;
-
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _localServices = [];
 
   // ✅ types subcolección
   List<Map<String, dynamic>> serviceTypes = const [];
@@ -121,11 +121,6 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
 
     // load types after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _ensureServiceLoaded(); // ← fetch directo si widget.services estaba vacío
-      if (widget.services.isEmpty) {
-        final snap = await FirebaseFirestore.instance.collection('services').limit(100).get();
-        if (mounted) setState(() => _localServices = snap.docs);
-      }
       await _loadTypesForSelectedService(autoPickCommon: false);
       _autoPickExistingOrCommonType();
 
@@ -378,6 +373,15 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
           clientId: clientId,
         );
 
+        // ── Audit log ─────────────────────────────────────────────────────
+        unawaited(AuditService().logAppointmentDeleted(
+          appointmentId: widget.appointmentId,
+          clientName: (widget.data['clientName'] ?? '').toString(),
+          serviceName: (widget.data['serviceName'] ?? '').toString(),
+          workerId: (widget.data['workerId'] ?? '').toString(),
+          performerWorkerId: context.read<UserProvider>().workerId,
+        ));
+
         if (oldWorkerId.isNotEmpty && oldDur > 0) {
           try {
             await _brRepo.notifyIfFreedSlotMatchesRequests(
@@ -500,7 +504,7 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                 const SizedBox(height: 12),
 
                 ServiceTypeSelectors(
-                  services: _localServices.isNotEmpty ? _localServices : widget.services,
+                  services: widget.services,
                   selectedServiceId: selectedServiceId,
                   selectedServiceData: selectedServiceData,
                   onPickService: (serviceId, serviceData) async {
@@ -744,6 +748,16 @@ class _EditAppointmentDialogState extends State<EditAppointmentDialog>
                             PendingConfirmationUtils.kField: pendingConfirmation,
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
+
+                          // ── Audit log ─────────────────────────────────────
+                          unawaited(AuditService().logAppointmentEdited(
+                            appointmentId: widget.appointmentId,
+                            clientName: (widget.data['clientName'] ?? '').toString(),
+                            serviceName: translatedName,
+                            appointmentDate: dt,
+                            workerId: (effectiveWorkerId ?? existingWorkerId),
+                            performerWorkerId: userProv.workerId,
+                          ));
 
                           final clientId = (widget.data['clientId'] ?? '').toString().trim();
                           if (clientId.isNotEmpty) {

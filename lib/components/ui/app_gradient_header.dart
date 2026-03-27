@@ -14,6 +14,7 @@ class AppGradientHeader extends StatelessWidget {
     this.centerTitle = false,
     this.titleStyle,
     this.showLanguageSelector = true,
+    this.trailing,
   });
 
   final String title;
@@ -25,6 +26,7 @@ class AppGradientHeader extends StatelessWidget {
   final bool centerTitle;
   final TextStyle? titleStyle;
   final bool showLanguageSelector;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -80,8 +82,14 @@ class AppGradientHeader extends StatelessWidget {
           if (showLanguageSelector)
             Positioned(
               top: padding.top,
-              right: 18,
+              right: trailing != null ? 74 : 18,
               child: const _LanguagePill(),
+            ),
+          if (trailing != null)
+            Positioned(
+              top: padding.top,
+              right: 18,
+              child: trailing!,
             ),
         ],
       ),

@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
@@ -11,6 +12,7 @@ import 'package:salon_app/provider/user_provider.dart';
 import 'package:salon_app/components/ui/app_gradient_header.dart';
 import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/components/ui/app_pill.dart';
+import 'package:salon_app/components/ui/header_action_button.dart';
 
 import 'package:salon_app/screens/home/lost_clients_screen.dart';
 import 'package:salon_app/screens/clients/clients_profile_screen.dart';
@@ -26,6 +28,8 @@ class HomeAdminScreen extends StatefulWidget {
 }
 
 class _HomeAdminScreenState extends State<HomeAdminScreen> {
+  static const _purple = Color(0xff721c80);
+
   HomeAdminMode _mode = HomeAdminMode.looking;
   Stream<QuerySnapshot<Map<String, dynamic>>>? _modeStream;
 
@@ -89,17 +93,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     }
   }
 
-  String _subtitle(S s) {
-    switch (mode) {
-      case HomeAdminMode.looking:   return s.subtitleLooking;
-      case HomeAdminMode.cancelled: return s.subtitleCancelled;
-      case HomeAdminMode.noShow:    return s.subtitleNoShow;
-    }
-  }
-
   Color _modeTint(HomeAdminMode m) {
     switch (m) {
-      case HomeAdminMode.looking:   return const Color(0xff721c80);
+      case HomeAdminMode.looking:   return _purple;
       case HomeAdminMode.cancelled: return Colors.orange;
       case HomeAdminMode.noShow:    return Colors.redAccent;
     }
@@ -113,9 +109,135 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     }
   }
 
-  Widget _modeButtons(bool isAdmin, S s) {
-    const purple = Color(0xff721c80);
+  // ── Header child: fecha + 3 stat pills reactivas al modo ─────────────────────
+  Widget _buildHeaderChild(S s) {
+    final now     = DateTime.now();
+    final dateStr = DateFormat('EEEE, d MMM', Localizations.localeOf(context).toString()).format(now);
 
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('clients').snapshots(),
+      builder: (_, snap) {
+        final docs      = snap.data?.docs ?? [];
+        final looking   = docs.where((d) => d.data()['bookingRequestActive'] == true).length;
+        final cancelled = docs.where((d) => (((d.data()['stats']?['totalCancelled']) as num?)?.toInt() ?? 0) > 0).length;
+        final noShow    = docs.where((d) => (((d.data()['stats']?['totalNoShow'])    as num?)?.toInt() ?? 0) > 0).length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Fecha + campana — misma fila, igual que buscador + botón en clients
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    dateStr,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.80),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                _buildBellButton(),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // 3 pills — mismo estilo que clients, color del modo activo resaltado
+            Row(
+              children: [
+                _statPill(
+                  icon: Icons.notifications_active_outlined,
+                  value: '$looking',
+                  color: Colors.white,
+                  active: mode == HomeAdminMode.looking,
+                  activeColor: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                _statPill(
+                  icon: Icons.event_busy_rounded,
+                  value: '$cancelled',
+                  color: Colors.white,
+                  active: mode == HomeAdminMode.cancelled,
+                  activeColor: Colors.orange[300]!,
+                ),
+                const SizedBox(width: 8),
+                _statPill(
+                  icon: Icons.person_off_rounded,
+                  value: '$noShow',
+                  color: Colors.white,
+                  active: mode == HomeAdminMode.noShow,
+                  activeColor: Colors.red[300]!,
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _statPill({
+    required IconData icon,
+    required String value,
+    required Color color,
+    bool active = false,
+    Color? activeColor,
+  }) {
+    final c = active ? (activeColor ?? color) : color;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.withOpacity(active ? 0.22 : 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.withOpacity(active ? 0.55 : 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: c.withOpacity(active ? 1.0 : 0.75)),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: c.withOpacity(active ? 1.0 : 0.85),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Bell button ───────────────────────────────────────────────────────────────
+  Widget _buildBellButton() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('clients')
+          .doc('__system__')
+          .collection('history')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snapA) {
+        final count = snapA.data?.docs.length ?? 0;
+        return HeaderActionButton(
+          icon: Icons.notifications_active_outlined,
+          badgeCount: count,
+          onTap: () => AdminNotificationsOverlay.show(
+            context,
+            onOpenClient: (clientId) =>
+                context.read<AdminNavProvider>().goToClientsAndOpen(clientId),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Mode buttons (bottom panel) ───────────────────────────────────────────────
+  Widget _modeButtons(bool isAdmin, S s) {
     Widget pill({
       required bool active,
       required VoidCallback onTap,
@@ -170,8 +292,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
               onTap: () => _setMode(HomeAdminMode.looking),
               icon: Icons.notifications_active_outlined,
               label: s.modeLooking,
-              tint: purple,
-              iconColor: purple,
+              tint: _purple,
+              iconColor: _purple,
             ),
             const SizedBox(width: 10),
             pill(
@@ -234,22 +356,20 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
   void _openClientProfile(String clientId) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-          builder: (_) => ClientProfileScreen(clientId: clientId)),
+      MaterialPageRoute(builder: (_) => ClientProfileScreen(clientId: clientId)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final s       = S.of(context);
-    final stream  = _modeStream ?? _queryForMode().snapshots();
-    final isAdmin = context.watch<UserProvider>().isAdmin;
+    final s            = S.of(context);
+    final stream       = _modeStream ?? _queryForMode().snapshots();
+    final isAdmin      = context.watch<UserProvider>().isAdmin;
     final bottomPanelH = isAdmin ? 140.0 : 92.0;
 
     return Scaffold(
       body: Stack(
         children: [
-
           Positioned.fill(
             child: SingleChildScrollView(
               padding: EdgeInsets.only(bottom: bottomPanelH + 18),
@@ -257,7 +377,8 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                 children: [
                   AppGradientHeader(
                     title: s.adminHome,
-                    subtitle: _subtitle(s),
+                    height: 195,
+                    child: _buildHeaderChild(s),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -291,14 +412,12 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                             final clientId    = d.id;
                             final displayName = _fullName(c, clientId);
                             final contact     = _contactLine(c);
+                            final cancelled   = ((c['stats']?['totalCancelled']) as num?)?.toInt() ?? 0;
+                            final noShow      = ((c['stats']?['totalNoShow'])    as num?)?.toInt() ?? 0;
+                            final attended    = ((c['stats']?['totalScheduled']) as num?)?.toInt() ?? 0;
+                            final tint        = _modeTint(mode);
 
-                            final cancelled = ((c['stats']?['totalCancelled']) as num?)?.toInt() ?? 0;
-                            final noShow    = ((c['stats']?['totalNoShow'])    as num?)?.toInt() ?? 0;
-                            final attended  = ((c['stats']?['totalScheduled']) as num?)?.toInt() ?? 0;
-
-                            final tint = _modeTint(mode);
-
-                            Widget trailing() {
+                            Widget trailingWidget() {
                               if (mode == HomeAdminMode.looking) {
                                 return AppPill(
                                   background: tint.withOpacity(0.10),
@@ -329,7 +448,7 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
                                 borderRadius: BorderRadius.circular(14),
                                 child: AppSectionCard(
                                   title: displayName,
-                                  trailing: trailing(),
+                                  trailing: trailingWidget(),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -359,83 +478,9 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
             ),
           ),
 
-          // Campana + badge
-
-          // Campana + badge
-          Positioned(
-            right: 18,
-            top: MediaQuery.of(context).padding.top + 10 + 26 + 8,
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('clients')
-                  .doc('__system__')
-                  .collection('history')
-                  .orderBy('createdAt', descending: true)
-                  .limit(50)
-                  .snapshots(),
-              builder: (context, snapA) {
-                final count = snapA.data?.docs.length ?? 0;
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      AdminNotificationsOverlay.show(
-                        context,
-                        onOpenClient: (clientId) {
-                          context.read<AdminNavProvider>().goToClientsAndOpen(clientId);
-                        },
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(14),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.20),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black.withOpacity(0.25)),
-                          ),
-                          child: const Center(
-                            child: Icon(Icons.notifications_active_outlined,
-                                color: Color(0xff721c80), size: 22),
-                          ),
-                        ),
-                        if (count > 0)
-                          Positioned(
-                            right: -6,
-                            top: -6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: Text(
-                                count > 99 ? '99+' : '$count',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 11),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
           // Panel sticky inferior
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
+            left: 0, right: 0, bottom: 0,
             child: SafeArea(
               top: false,
               child: Container(

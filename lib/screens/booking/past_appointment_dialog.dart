@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/components/service_type_selectors.dart';
 import 'package:salon_app/services/appointment_service.dart';
+import 'package:salon_app/services/audit_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/service_types_utils.dart';
 
@@ -42,8 +44,6 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
   String? selectedServiceId;
   Map<String, dynamic>? selectedServiceData;
-
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _localServices = [];
 
   // types subcolección
   List<Map<String, dynamic>> serviceTypes = const [];
@@ -95,11 +95,6 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _ensureServiceLoaded(); // ← fetch directo si widget.services estaba vacío
-      if (widget.services.isEmpty) {
-        final snap = await FirebaseFirestore.instance.collection('services').limit(100).get();
-        if (mounted) setState(() => _localServices = snap.docs);
-      }
       await _loadTypesForSelectedService(autoPickCommon: false);
       _autoPickExistingOrCommonType();
       if (mounted) setState(() {});
@@ -346,6 +341,15 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
           clientId: clientId,
         );
 
+        // ── Audit log ─────────────────────────────────────────────────────
+        unawaited(AuditService().logAppointmentDeleted(
+          appointmentId: widget.appointmentId,
+          clientName: (widget.data['clientName'] ?? '').toString(),
+          serviceName: (widget.data['serviceName'] ?? '').toString(),
+          workerId: (widget.data['workerId'] ?? '').toString(),
+          performerWorkerId: context.read<UserProvider>().workerId,
+        ));
+
         if (oldWorkerId.isNotEmpty && oldDur > 0) {
           try {
             await _brRepo.notifyIfFreedSlotMatchesRequests(
@@ -458,7 +462,7 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
                 // Selector servicio/tipo (editable)
                 ServiceTypeSelectors(
-                  services: _localServices.isNotEmpty ? _localServices : widget.services,
+                  services: widget.services,
                   selectedServiceId: selectedServiceId,
                   selectedServiceData: selectedServiceData,
                   onPickService: (serviceId, serviceData) async {
@@ -628,6 +632,8 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
                             finalPrice = parsed;
                           }
 
+                          final hadFinalPrice = widget.data['finalPrice'] != null;
+
                           await FirebaseFirestore.instance
                               .collection('appointments')
                               .doc(widget.appointmentId)
@@ -643,13 +649,11 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
                             'durationMin': durationMin,
                             'basePrice': basePrice,
-                            'total': basePrice, // tu lógica actual
+                            'total': basePrice,
 
-                            // Si faltaba workerId en docs viejos, se puede asignar
                             if ((effectiveWorkerId ?? '').isNotEmpty && existingWorkerId.isEmpty)
                               'workerId': effectiveWorkerId,
 
-                            // ✅ finalPrice solo si se rellena
                             if (finalPrice != null)
                               'finalPrice': finalPrice
                             else
@@ -657,6 +661,32 @@ class _PastAppointmentDialogState extends State<PastAppointmentDialog>
 
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
+
+                          // ── Audit log ─────────────────────────────────────
+                          final _clientName = (widget.data['clientName'] ?? '').toString();
+                          final _workerIdLog = (effectiveWorkerId ?? existingWorkerId).toString();
+                          unawaited(AuditService().logAppointmentEdited(
+                            appointmentId: widget.appointmentId,
+                            clientName: _clientName,
+                            serviceName: translatedName,
+                            appointmentDate: widget.data['appointmentDate'] is Timestamp
+                                ? (widget.data['appointmentDate'] as Timestamp).toDate()
+                                : DateTime.now(),
+                            workerId: _workerIdLog,
+                            performerWorkerId: userProv.workerId,
+                          ));
+                          if (finalPrice != null || hadFinalPrice) {
+                            final oldFp = hadFinalPrice ? (widget.data['finalPrice'] as num?) : null;
+                            unawaited(AuditService().logFinalPrice(
+                              appointmentId: widget.appointmentId,
+                              clientName: _clientName,
+                              serviceName: translatedName,
+                              oldPrice: oldFp,
+                              newPrice: finalPrice,
+                              workerId: _workerIdLog,
+                              performerWorkerId: userProv.workerId,
+                            ));
+                          }
 
                           if (!mounted) return;
                           Navigator.pop(context);
