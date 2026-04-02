@@ -29,9 +29,13 @@ class AvailabilityService {
   /// Computes availability for one booking request given loaded appointments.
   /// Fixed worker: synchronous slot scan.
   /// Any worker: returns `unknown` — caller handles async via FutureBuilder.
+  ///
+  /// [blockedSlotsByWorker] mapa workerId → lista de {startMin, endMin}
+  /// ya filtrados para los días relevantes.
   ({BookingRequestAvailability status, DateTime? nextStart}) availabilityFor({
     required Map<String, dynamic> br,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+    Map<String, List<Map<String, int>>> blockedSlotsByWorker = const {},
   }) {
     final workerIdRaw = (br['workerId'] ?? '').toString().trim();
     if (workerIdRaw.isEmpty) {
@@ -46,6 +50,7 @@ class AvailabilityService {
     final ranges  = extractRanges(br);
     final durMin  = requestedDurationMin(br);
     final allowed = allowedOverlapMin(durMin);
+    final blocked = blockedSlotsByWorker[workerIdRaw] ?? const [];
 
     // No preferred days → scan next 30 days from today
     final today = startOfDay(DateTime.now());
@@ -58,9 +63,16 @@ class AvailabilityService {
           ..sort((a, b) => a.compareTo(b)));
 
     for (final day in daysToScan) {
+      final dayKey = BookingRequestUtils.yyyymmdd(day);
+      final dayBlockedFiltered = blocked
+          .where((b) => b['date'] == null || b['date'].toString() == dayKey)
+          .map((b) => {'startMin': b['startMin'] ?? 0, 'endMin': b['endMin'] ?? 0})
+          .toList();
+
       final first = firstSlotOnDay(
         day: day, ranges: ranges, durMin: durMin,
-        workerId: workerIdRaw, allowedOverlap: allowed, appts: appts,
+        workerId: workerIdRaw, allowedOverlap: allowed,
+        appts: appts, blockedSlots: dayBlockedFiltered,
       );
       if (first != null) {
         return (status: BookingRequestAvailability.available, nextStart: first);
@@ -74,6 +86,7 @@ class AvailabilityService {
     required Map<String, dynamic> br,
     required List<String> workerIds,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+    Map<String, List<Map<String, int>>> blockedSlotsByWorker = const {},
   }) {
     if (workerIds.isEmpty) {
       return (status: BookingRequestAvailability.unknown, nextStart: null);
@@ -99,10 +112,17 @@ class AvailabilityService {
 
     DateTime? best;
     for (final day in daysToScan) {
+      final dayKey = BookingRequestUtils.yyyymmdd(day);
       for (final wid in workerIds) {
+        final dayBlockedFiltered = (blockedSlotsByWorker[wid] ?? const [])
+            .where((b) => b['date'] == null || b['date'].toString() == dayKey)
+            .map((b) => {'startMin': b['startMin'] ?? 0, 'endMin': b['endMin'] ?? 0})
+            .toList();
+
         final first = firstSlotOnDay(
           day: day, ranges: ranges, durMin: durMin,
-          workerId: wid, allowedOverlap: allowed, appts: appts,
+          workerId: wid, allowedOverlap: allowed,
+          appts: appts, blockedSlots: dayBlockedFiltered,
         );
         if (first != null && (best == null || first.isBefore(best))) {
           best = first;
@@ -173,6 +193,11 @@ class AvailabilityService {
     return e > s ? e - s : 0;
   }
 
+  /// Comprueba que [startMin, startMin+durMin) no solape con ningún appointment
+  /// programado NI con ningún blocked slot del worker en ese día.
+  ///
+  /// [blockedSlots] es una lista de mapas con claves 'startMin' y 'endMin'
+  /// ya filtrados para el mismo día y workerId.
   bool slotOkForWorker({
     required DateTime day,
     required int startMin,
@@ -180,8 +205,11 @@ class AvailabilityService {
     required String workerId,
     required int allowedOverlap,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+    List<Map<String, int>> blockedSlots = const [],
   }) {
     final endMin = startMin + durMin;
+
+    // 1) Verificar appointments
     for (final a in appts) {
       final data = a.data();
       if ((data['status'] ?? '').toString() != 'scheduled') continue;
@@ -196,6 +224,16 @@ class AvailabilityService {
       final a0 = dt.hour * 60 + dt.minute;
       if (overlapMin(startMin, endMin, a0, a0 + adur) > allowedOverlap) return false;
     }
+
+    // 2) Verificar blocked slots — se tratan igual que appointments:
+    //    cualquier solapamiento (inicio o interior del procedimiento) bloquea.
+    for (final b in blockedSlots) {
+      final b0 = b['startMin'] ?? 0;
+      final b1 = b['endMin'] ?? 0;
+      if (b1 <= b0) continue;
+      if (overlapMin(startMin, endMin, b0, b1) > 0) return false;
+    }
+
     return true;
   }
 
@@ -206,6 +244,7 @@ class AvailabilityService {
     required String workerId,
     required int allowedOverlap,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
+    List<Map<String, int>> blockedSlots = const [],
   }) {
     // Si el día es hoy, no ofrecer slots que ya pasaron.
     final now = DateTime.now();
@@ -217,7 +256,6 @@ class AvailabilityService {
     for (final r in ranges) {
       final rsRaw = ((r['startMin'] ?? 0) < bizStartMin
           ? bizStartMin : (r['startMin'] ?? 0));
-      // Para hoy: el inicio del rango nunca puede ser antes del minuto actual.
       final rs = isToday && rsRaw < nowMin ? nowMin : rsRaw;
       final re = ((r['endMin'] ?? 24 * 60) > bizEndMax
           ? bizEndMax : (r['endMin'] ?? 24 * 60));
@@ -225,7 +263,8 @@ class AvailabilityService {
       for (int s = rs; s + durMin <= re; s += stepMin) {
         if (slotOkForWorker(
           day: day, startMin: s, durMin: durMin,
-          workerId: workerId, allowedOverlap: allowedOverlap, appts: appts,
+          workerId: workerId, allowedOverlap: allowedOverlap,
+          appts: appts, blockedSlots: blockedSlots,
         )) {
           return DateTime(day.year, day.month, day.day, s ~/ 60, s % 60);
         }
@@ -248,6 +287,53 @@ class AvailabilityService {
       if (sm >= 0 && em > sm) out.add({'startMin': sm, 'endMin': em});
     }
     return out.isEmpty ? const [{'startMin': 0, 'endMin': 24 * 60}] : out;
+  }
+
+  /// Carga los blocked slots de Firestore para los [workerIds] y [dayKeys] dados
+  /// y los almacena en caché interna. Llama esto antes de availabilityFor/
+  /// availabilityForAnyWorker para que los blocked slots se tengan en cuenta.
+  Future<void> fetchBlockedSlots({
+    required List<String> workerIds,
+    required List<String> dayKeys,
+  }) async {
+    if (workerIds.isEmpty || dayKeys.isEmpty) return;
+    // Firestore whereIn admite máximo 10 valores
+    final days = dayKeys.toSet().take(10).toList();
+    for (final wid in workerIds) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('workers')
+            .doc(wid)
+            .collection('blockedSlots')
+            .where('date', whereIn: days)
+            .get();
+        _blockedSlotRaw[wid] = snap.docs.map((d) {
+          final data = d.data();
+          return <String, dynamic>{
+            'date':     (data['date']     ?? '').toString(),
+            'startMin': (data['startMin'] is num) ? (data['startMin'] as num).toInt() : 0,
+            'endMin':   (data['endMin']   is num) ? (data['endMin']   as num).toInt() : 0,
+          };
+        }).toList();
+      } catch (_) {
+        _blockedSlotRaw[wid] = [];
+      }
+    }
+  }
+
+  /// Raw blocked slots con campo 'date' (String). Rellena fetchBlockedSlots.
+  final Map<String, List<Map<String, dynamic>>> _blockedSlotRaw = {};
+
+  /// Devuelve blocked slots de un worker filtrados por dayKey como Map<String,int>.
+  List<Map<String, int>> blockedForWorkerDay(String workerId, String dayKey) {
+    final raw = _blockedSlotRaw[workerId] ?? const [];
+    return raw
+        .where((b) => (b['date'] ?? '').toString() == dayKey)
+        .map((b) => {
+              'startMin': (b['startMin'] as int?) ?? 0,
+              'endMin':   (b['endMin']   as int?) ?? 0,
+            })
+        .toList();
   }
 
   DateTime startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);

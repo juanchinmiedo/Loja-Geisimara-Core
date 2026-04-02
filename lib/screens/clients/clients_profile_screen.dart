@@ -58,6 +58,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
   final _phoneCtrl   = TextEditingController();
   final _igCtrl      = TextEditingController();
 
+  String? _lastBlockedCacheKey;
+
   String? _brWorkerId;
   String? _brServiceId;
   Map<String, dynamic>? _brServiceData;
@@ -142,6 +144,29 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           .snapshots();
 
   // ── Range helpers ─────────────────────────────────────────────────────────
+
+  /// Construye el mapa de blocked slots por workerId usando la caché interna
+  /// de _avSvc (que se rellena tras fetchBlockedSlots). Filtra por los días
+  /// preferidos del booking request.
+  Map<String, List<Map<String, int>>> _buildBlockedMap(
+    List<String> workerIds,
+    Map<String, dynamic> br,
+  ) {
+    final days = (br['preferredDays'] as List?)
+            ?.map((e) => e.toString())
+            .where((s) => s.trim().isNotEmpty)
+            .toList() ??
+        const <String>[];
+    final result = <String, List<Map<String, int>>>{};
+    for (final wid in workerIds) {
+      final slots = <Map<String, int>>[];
+      for (final day in days) {
+        slots.addAll(_avSvc.blockedForWorkerDay(wid, day));
+      }
+      result[wid] = slots;
+    }
+    return result;
+  }
 
   bool _rangesFitDuration(List<Map<String, int>> ranges, int dur) {
     if (ranges.isEmpty) return true;
@@ -977,8 +1002,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                       final wid  = (br['workerId'] ?? '').toString().trim();
                       final info = wid.isEmpty
                           ? _avSvc.availabilityForAnyWorker(
-                              br: br, workerIds: workerIds, appts: apptDocs)
-                          : _avSvc.availabilityFor(br: br, appts: apptDocs);
+                              br: br, workerIds: workerIds, appts: apptDocs,
+                              blockedSlotsByWorker: _buildBlockedMap(workerIds, br))
+                          : _avSvc.availabilityFor(br: br, appts: apptDocs,
+                              blockedSlotsByWorker: _buildBlockedMap([wid], br));
                       final lbl  = _avSvc.pillLabel(info.status, info.nextStart);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -1028,7 +1055,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                 );
               }
 
-              // Fetch worker IDs once for "any worker" requests
+              // Fetch worker IDs once + blocked slots para los días de los requests
+              final dayKeys = brDataList
+                  .expand((br) => (br['preferredDays'] as List?)
+                      ?.map((e) => e.toString())
+                      .where((s) => s.trim().isNotEmpty) ?? const <String>[])
+                  .toSet()
+                  .toList();
+
               return FutureBuilder<List<String>>(
                 future: FirebaseFirestore.instance
                     .collection('workers')
@@ -1036,6 +1070,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                     .then((s) => s.docs.map((d) => d.id).toList()),
                 builder: (_, workerSnap) {
                   final workerIds = workerSnap.data ?? const [];
+
+                  // Cargar blocked slots una sola vez por conjunto de días+workers.
+                  // Usamos el hash del conjunto como key para evitar refetches en rebuild.
+                  final _cacheKey = '${workerIds.join(',')}|${dayKeys.join(',')}';
+                  if (workerSnap.hasData && workerIds.isNotEmpty && dayKeys.isNotEmpty
+                      && _lastBlockedCacheKey != _cacheKey) {
+                    _lastBlockedCacheKey = _cacheKey;
+                    _avSvc.fetchBlockedSlots(
+                      workerIds: workerIds,
+                      dayKeys: dayKeys,
+                    ).then((_) {
+                      if (mounted) setState(() {});
+                    });
+                  }
 
                   if (apptStream == null) {
                     return buildCards(const [], workerIds);

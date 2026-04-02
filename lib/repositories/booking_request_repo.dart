@@ -534,6 +534,29 @@ class BookingRequestRepo {
       }
       if (ranges.isEmpty) return false;
 
+      // Cargar blocked slots para cada worker en los días relevantes.
+      final blockedByWorker = <String, List<Map<String, dynamic>>>{};
+      for (final wid in workerIds) {
+        try {
+          final bSnap = await db
+              .collection('workers')
+              .doc(wid)
+              .collection('blockedSlots')
+              .where('date', whereIn: futureDays.take(10).toList())
+              .get();
+          blockedByWorker[wid] = bSnap.docs.map((d) {
+            final data = d.data();
+            return <String, dynamic>{
+              'date':     (data['date'] ?? '').toString(),
+              'startMin': (data['startMin'] is num) ? (data['startMin'] as num).toInt() : 0,
+              'endMin':   (data['endMin']   is num) ? (data['endMin']   as num).toInt() : 0,
+            };
+          }).toList();
+        } catch (_) {
+          blockedByWorker[wid] = [];
+        }
+      }
+
       // Buscar el primer slot libre.
       DateTime? foundSlot;
       String? foundWorkerId;
@@ -561,10 +584,11 @@ class BookingRequestRepo {
             for (int s = rs; s + durMin <= re; s += 5) {
               final endMin = s + durMin;
               bool ok = true;
+
+              // Check appointments
               for (final a in appts) {
                 final data = a.data();
-                if ((data['workerId'] ?? '').toString().trim() != wid)
-                  continue;
+                if ((data['workerId'] ?? '').toString().trim() != wid) continue;
                 final ts = data['appointmentDate'];
                 if (ts is! Timestamp) continue;
                 final dt = ts.toDate();
@@ -584,6 +608,24 @@ class BookingRequestRepo {
                   break;
                 }
               }
+
+              // Check blocked slots — mismo tratamiento que appointments
+              if (ok) {
+                final workerBlocked = blockedByWorker[wid] ?? const [];
+                for (final b in workerBlocked) {
+                  if ((b['date'] ?? '').toString() != dayKey) continue;
+                  final b0 = (b['startMin'] as int?) ?? 0;
+                  final b1 = (b['endMin']   as int?) ?? 0;
+                  if (b1 <= b0) continue;
+                  final overlapS = s > b0 ? s : b0;
+                  final overlapE = endMin < b1 ? endMin : b1;
+                  if (overlapE > overlapS) {
+                    ok = false;
+                    break;
+                  }
+                }
+              }
+
               if (ok) {
                 foundSlot =
                     DateTime(day.year, day.month, day.day, s ~/ 60, s % 60);
