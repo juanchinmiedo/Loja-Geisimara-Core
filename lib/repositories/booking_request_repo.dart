@@ -637,13 +637,40 @@ class BookingRequestRepo {
         }
       }
 
-      if (foundSlot == null) return false;
+      // Sin hueco disponible: borrar alerta previa si existía (match perdido).
+      if (foundSlot == null) {
+        try {
+          final prev = await _alerts
+              .where('type', isEqualTo: 'booking_request_match_found')
+              .where('requestId', isEqualTo: requestId)
+              .get();
+          if (prev.docs.isNotEmpty) {
+            final b = db.batch();
+            for (final d in prev.docs) b.delete(d.reference);
+            await b.commit();
+          }
+        } catch (_) {}
+        return false;
+      }
 
       final dayKey = BookingRequestUtils.yyyymmdd(foundSlot);
       final dayLabel =
           BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(dayKey);
       final hh = foundSlot.hour.toString().padLeft(2, '0');
       final mm = foundSlot.minute.toString().padLeft(2, '0');
+
+      // Borrar alerta previa de este mismo requestId (puede estar desactualizada).
+      try {
+        final prev = await _alerts
+            .where('type', isEqualTo: 'booking_request_match_found')
+            .where('requestId', isEqualTo: requestId)
+            .get();
+        if (prev.docs.isNotEmpty) {
+          final b = db.batch();
+          for (final d in prev.docs) b.delete(d.reference);
+          await b.commit();
+        }
+      } catch (_) {}
 
       await _safeAddAlert({
         'type': 'booking_request_match_found',
@@ -665,6 +692,212 @@ class BookingRequestRepo {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Cuando se crea/edita un appointment que ocupa un slot:
+  /// 1. Borra alertas `booking_request_match_found` cuyo slot queda invalidado.
+  /// 2. Re-escanea TODOS los booking requests activos del mismo worker (o any)
+  ///    para ese día y emite una nueva alerta `freed_slot_matches` si algún
+  ///    request aún puede encajar en otro hueco libre — o no emite nada si ya
+  ///    no hay disponibilidad, dejando al admin saber que el match se perdió.
+  /// 3. Detecta si algún request activo coincide en clientId + serviceId con
+  ///    el appointment recién creado → lo borra automáticamente y emite alerta
+  ///    `booking_request_removed_by_appointment`.
+  Future<void> onAppointmentSaved({
+    required DateTime appointmentStart,
+    required int appointmentDurationMin,
+    required String appointmentWorkerId,
+    required String appointmentClientId,
+    required String appointmentServiceId,
+    String appointmentId = '',
+  }) async {
+    // ── 1. Invalidar alertas de match que apuntan a este slot ─────────────────
+    await invalidateMatchAlertsForSlot(
+      appointmentStart: appointmentStart,
+      appointmentDurationMin: appointmentDurationMin,
+      workerId: appointmentWorkerId,
+    );
+
+    // ── 2. Re-escanear requests activos: ¿alguno perdió su único match? ───────
+    // Cargamos todos los requests activos (any worker + mismo worker).
+    try {
+      final qAny = await _req
+          .where('active', isEqualTo: true)
+          .where('workerId', isNull: true)
+          .get();
+      final qSame = await _req
+          .where('active', isEqualTo: true)
+          .where('workerId', isEqualTo: appointmentWorkerId)
+          .get();
+
+      final merged = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final d in qAny.docs) merged[d.id] = d;
+      for (final d in qSame.docs) merged[d.id] = d;
+
+      final dayKey = BookingRequestUtils.yyyymmdd(appointmentStart);
+
+      for (final doc in merged.values) {
+        final br = doc.data();
+        final preferredDays = (br['preferredDays'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const <String>[];
+        // Solo nos interesan requests que tenían este día como preferido.
+        if (!preferredDays.contains(dayKey)) continue;
+
+        final clientId = (br['clientId'] ?? '').toString();
+        final requestId = doc.id;
+
+        // Borrar alerta previa de este request si existe.
+        try {
+          final prevAlerts = await _alerts
+              .where('type', isEqualTo: 'booking_request_match_found')
+              .where('requestId', isEqualTo: requestId)
+              .get();
+          final batch = db.batch();
+          for (final a in prevAlerts.docs) batch.delete(a.reference);
+          if (prevAlerts.docs.isNotEmpty) await batch.commit();
+        } catch (_) {}
+
+        // Re-lanzar búsqueda para este request.
+        await notifyIfRequestMatchesSlots(
+          requestId: requestId,
+          clientId: clientId,
+          brData: br,
+        );
+      }
+    } catch (_) {}
+
+    // ── 3. Auto-borrar requests del mismo cliente + mismo procedimiento ────────
+    await checkAndAutoDeleteRequestsBlockedByAppointment(
+      appointmentClientId: appointmentClientId,
+      appointmentServiceId: appointmentServiceId,
+      appointmentStart: appointmentStart,
+      appointmentDurationMin: appointmentDurationMin,
+      appointmentWorkerId: appointmentWorkerId,
+      appointmentId: appointmentId,
+    );
+  }
+
+  /// Detecta booking requests activos del mismo cliente y mismo serviceId
+  /// que el appointment recién guardado, los borra y crea alerta.
+  Future<void> checkAndAutoDeleteRequestsBlockedByAppointment({
+    required String appointmentClientId,
+    required String appointmentServiceId,
+    required DateTime appointmentStart,
+    required int appointmentDurationMin,
+    required String appointmentWorkerId,
+    String appointmentId = '',
+  }) async {
+    try {
+      final snap = await _req
+          .where('clientId', isEqualTo: appointmentClientId)
+          .where('serviceId', isEqualTo: appointmentServiceId)
+          .where('active', isEqualTo: true)
+          .get();
+
+      if (snap.docs.isEmpty) return;
+
+      final dayKey = BookingRequestUtils.yyyymmdd(appointmentStart);
+      final apptStartMin =
+          appointmentStart.hour * 60 + appointmentStart.minute;
+      final apptEndMin = apptStartMin + appointmentDurationMin;
+
+      final toDelete = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+      for (final doc in snap.docs) {
+        final br = doc.data();
+
+        // Worker compatible?
+        final reqWorker = (br['workerId'] as String?)?.trim() ?? '';
+        if (reqWorker.isNotEmpty && reqWorker != appointmentWorkerId) continue;
+
+        // El appointment cae en algún día preferido del request?
+        final preferredDays = (br['preferredDays'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const <String>[];
+        if (preferredDays.isNotEmpty && !preferredDays.contains(dayKey)) {
+          continue;
+        }
+
+        // El appointment cae dentro de algún rango horario del request?
+        final rangesRaw =
+            (br['preferredTimeRanges'] as List?) ?? const [];
+        if (rangesRaw.isNotEmpty) {
+          bool inRange = false;
+          for (final r in rangesRaw) {
+            if (r is! Map) continue;
+            final m = Map<String, dynamic>.from(r);
+            final s = m['startMin'] ?? m['start'];
+            final e = m['endMin'] ?? m['end'];
+            final rs =
+                s is num ? s.toInt() : int.tryParse('$s') ?? -1;
+            final re =
+                e is num ? e.toInt() : int.tryParse('$e') ?? -1;
+            if (rs < 0 || re <= rs) continue;
+            // El appointment encaja completo dentro del rango
+            if (apptStartMin >= rs && apptEndMin <= re) {
+              inRange = true;
+              break;
+            }
+          }
+          if (!inRange) continue;
+        }
+
+        toDelete.add(doc);
+      }
+
+      if (toDelete.isEmpty) return;
+
+      // Borrar en batch y crear alerta por cada uno.
+      final batch = db.batch();
+      for (final doc in toDelete) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      // Actualizar bookingRequestActive en el cliente.
+      final rest = await _req
+          .where('clientId', isEqualTo: appointmentClientId)
+          .where('active', isEqualTo: true)
+          .get();
+      await _clientRef(appointmentClientId).set({
+        'bookingRequestActive': rest.docs.isNotEmpty,
+        'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Borrar alertas previas de match para estos requests.
+      for (final doc in toDelete) {
+        try {
+          final prevAlerts = await _alerts
+              .where('type', isEqualTo: 'booking_request_match_found')
+              .where('requestId', isEqualTo: doc.id)
+              .get();
+          final b = db.batch();
+          for (final a in prevAlerts.docs) b.delete(a.reference);
+          if (prevAlerts.docs.isNotEmpty) await b.commit();
+        } catch (_) {}
+      }
+
+      // Una alerta resumen.
+      final dayLabel =
+          BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(dayKey);
+      final hh = appointmentStart.hour.toString().padLeft(2, '0');
+      final mm = appointmentStart.minute.toString().padLeft(2, '0');
+
+      await _safeAddAlert({
+        'type': 'booking_request_removed_by_appointment',
+        'clientId': appointmentClientId,
+        'title': 'Looking eliminado — cita creada',
+        'body':
+            'Se creó una cita el $dayLabel a las $hh:$mm y se eliminó automáticamente '
+            '${toDelete.length} looking(s) del mismo cliente y procedimiento.',
+        'appointmentId': appointmentId,
+        'removedCount': toDelete.length,
+      });
+    } catch (_) {}
   }
 
   /// ✅ Cuando se crea un appointment que ocupa un slot, invalida alertas

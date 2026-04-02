@@ -12,10 +12,13 @@
 //     ),
 //   );
 
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:salon_app/generated/l10n.dart';
 
 import 'package:salon_app/repositories/blocked_slot_repo.dart';
+import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/app_time_picker.dart';
 import 'package:salon_app/utils/date_time_utils.dart';
 import 'package:salon_app/utils/time_of_day_utils.dart';
@@ -125,6 +128,9 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
         endMin:   _endMin,
         reason:   _reasonCtrl.text.trim(),
       );
+      // Re-escanear requests activos: el nuevo bloqueo puede haber invalidado
+      // un match previo o puede haber liberado otro si tapaba un appointment.
+      unawaited(_rescanRequestsForDay());
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -134,6 +140,44 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Re-escanea todos los booking requests activos que tienen el día de este
+  /// diálogo como preferido, actualiza sus alertas de match.
+  Future<void> _rescanRequestsForDay() async {
+    try {
+      final brRepo = BookingRequestRepo(FirebaseFirestore.instance);
+      final dayKey = _yyyymmdd(widget.date);
+
+      final qAny = await FirebaseFirestore.instance
+          .collection('booking_requests')
+          .where('active', isEqualTo: true)
+          .where('workerId', isNull: true)
+          .get();
+      final qSame = await FirebaseFirestore.instance
+          .collection('booking_requests')
+          .where('active', isEqualTo: true)
+          .where('workerId', isEqualTo: widget.workerId)
+          .get();
+
+      final merged = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final d in qAny.docs) merged[d.id] = d;
+      for (final d in qSame.docs) merged[d.id] = d;
+
+      for (final doc in merged.values) {
+        final br = doc.data();
+        final preferredDays = (br['preferredDays'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const <String>[];
+        if (!preferredDays.contains(dayKey)) continue;
+        await brRepo.notifyIfRequestMatchesSlots(
+          requestId: doc.id,
+          clientId: (br['clientId'] ?? '').toString(),
+          brData: br,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _deleteSlot(BlockedSlot slot) async {
@@ -163,6 +207,8 @@ class _BlockSlotDialogState extends State<BlockSlotDialog> {
     if (ok != true) return;
     await widget.repo.deleteSlot(
         workerId: widget.workerId, slotId: slot.id);
+    // Al liberar el bloqueo puede haber quedado disponible un slot para algún request.
+    unawaited(_rescanRequestsForDay());
     if (!mounted) return;
     setState(() => _existing.removeWhere((s) => s.id == slot.id));
   }

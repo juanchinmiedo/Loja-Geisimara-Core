@@ -9,10 +9,10 @@ import 'package:salon_app/widgets/worker_choice_pills.dart';
 import 'package:salon_app/utils/keyboard_utils.dart';
 
 /// Simple create form:
-/// - Procedure dropdown (required)
+/// - Procedure dropdown (required) — muestra error inline si se intenta guardar sin seleccionar
 /// - Worker choice (Any or specific)
 /// - Day + time range pills
-class BookingRequestCreateForm extends StatelessWidget {
+class BookingRequestCreateForm extends StatefulWidget {
   const BookingRequestCreateForm({
     super.key,
     required this.selectedWorkerId,
@@ -49,35 +49,45 @@ class BookingRequestCreateForm extends StatelessWidget {
   final Color purple;
 
   @override
+  State<BookingRequestCreateForm> createState() =>
+      _BookingRequestCreateFormState();
+}
+
+class _BookingRequestCreateFormState extends State<BookingRequestCreateForm> {
+  bool _showProcedureError = false;
+
+  @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    final servicesStream = FirebaseFirestore.instance.collection('services').snapshots();
+    final servicesStream =
+        FirebaseFirestore.instance.collection('services').snapshots();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(s.procedureLabel, style: const TextStyle(fontWeight: FontWeight.w900)),
+        Text(s.procedureLabel,
+            style: const TextStyle(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
 
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: servicesStream,
           builder: (context, snap) {
-            final docs = snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final docs = snap.data?.docs ??
+                const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
             return Listener(
-              onPointerDown: (_) {
-                KeyboardUtils.hide();
-              },
+              onPointerDown: (_) => KeyboardUtils.hide(),
               child: ServiceTypeSelectors(
-                services: docs, // ✅ lista de services (QueryDocumentSnapshot)
-                selectedServiceId: selectedServiceId,
-                selectedServiceData: null, // ✅ aquí no la necesitamos para booking request
+                services: docs,
+                selectedServiceId: widget.selectedServiceId,
+                selectedServiceData: null,
                 onPickService: (serviceId, serviceData) async {
-                  // ✅ mantenemos tu API actual (onServiceChanged solo recibe serviceId)
-                  onServiceChanged(serviceId);
+                  widget.onServiceChanged(serviceId);
+                  // Al seleccionar procedimiento, ocultar el error.
+                  if (serviceId != null && serviceId.isNotEmpty) {
+                    setState(() => _showProcedureError = false);
+                  }
                 },
-
-                // ✅ booking request NO usa types => lo dejamos vacío
                 loadingTypes: false,
                 serviceTypes: const [],
                 selectedType: null,
@@ -87,25 +97,52 @@ class BookingRequestCreateForm extends StatelessWidget {
           },
         ),
 
+        // Error inline bajo el selector de procedimiento.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          child: _showProcedureError
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 13,
+                          color: Colors.red[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        s.selectProcedureFirst,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red[600],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+
         const SizedBox(height: 12),
 
-        Text(s.worker, style: const TextStyle(fontWeight: FontWeight.w900)),
+        Text(s.worker,
+            style: const TextStyle(fontWeight: FontWeight.w900)),
         const SizedBox(height: 8),
         WorkerChoicePills(
-          value: selectedWorkerId,
-          onChanged: onWorkerChanged,
+          value: widget.selectedWorkerId,
+          onChanged: widget.onWorkerChanged,
           anyLabel: s.any,
         ),
 
         const SizedBox(height: 12),
         BookingRequestMultiPickersPills(
-          selectedDays: selectedDays,
-          selectedRanges: selectedRanges,
-          onAddDay: onAddDay,
-          onRemoveDayKey: onRemoveDayKey,
-          onAddRange: onAddRange,
-          onRemoveRangeAt: onRemoveRangeAt,
-          purple: purple,
+          selectedDays: widget.selectedDays,
+          selectedRanges: widget.selectedRanges,
+          onAddDay: widget.onAddDay,
+          onRemoveDayKey: widget.onRemoveDayKey,
+          onAddRange: widget.onAddRange,
+          onRemoveRangeAt: widget.onRemoveRangeAt,
+          purple: widget.purple,
         ),
 
         const SizedBox(height: 12),
@@ -113,18 +150,27 @@ class BookingRequestCreateForm extends StatelessWidget {
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: purple,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              backgroundColor: widget.purple,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: () {
               FocusScope.of(context).unfocus();
               KeyboardUtils.unfocus();
-              onCreate();
+              // Validar procedimiento antes de llamar onCreate.
+              if (widget.selectedServiceId == null ||
+                  widget.selectedServiceId!.isEmpty) {
+                setState(() => _showProcedureError = true);
+                return;
+              }
+              setState(() => _showProcedureError = false);
+              widget.onCreate();
             },
             icon: const Icon(Icons.check, color: Colors.white),
             label: Text(
               s.createRequest,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w900),
             ),
           ),
         ),

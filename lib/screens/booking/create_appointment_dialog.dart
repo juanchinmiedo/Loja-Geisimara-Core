@@ -1027,12 +1027,16 @@ class _CreateAppointmentDialogState extends State<CreateAppointmentDialog>
                           try {
                             final serviceCategory = (selectedServiceData?['category'] ?? 'hands').toString();
 
-                            // ✅ Invalida alertas de match previas que este appointment ocupa.
-                            unawaited(_brRepo.invalidateMatchAlertsForSlot(
-                              appointmentStart: dt,
-                              appointmentDurationMin: durationMin,
-                              workerId: workerId,
-                            ));
+                          // ✅ Invalida alertas obsoletas, re-escanea requests
+                          // afectados y auto-borra lookings del mismo cliente+servicio.
+                          unawaited(_brRepo.onAppointmentSaved(
+                            appointmentStart: dt,
+                            appointmentDurationMin: durationMin,
+                            appointmentWorkerId: workerId,
+                            appointmentClientId: clientId,
+                            appointmentServiceId: selectedServiceId ?? '',
+                            appointmentId: apptRef.id,
+                          ));
 
                             final plan = await _brRepo.buildDeletePlanForNewAppointment(
                               clientId: clientId,

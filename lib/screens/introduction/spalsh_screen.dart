@@ -1,9 +1,11 @@
 // lib/screens/introduction/spalsh_screen.dart
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/screens/introduction/onboarding_screen.dart';
 import 'package:salon_app/components/bottom_navigationbar.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
@@ -59,6 +61,11 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     context.read<AdminNavProvider>().setTab(0);
+
+    // Limpiar requests expirados al arrancar (fire-and-forget).
+    unawaited(BookingRequestRepo(FirebaseFirestore.instance)
+        .pruneExpiredActiveRequests());
+
     Navigator.pushReplacement(context,
         MaterialPageRoute(builder: (_) => const BottomNavigationComponent()));
   }
