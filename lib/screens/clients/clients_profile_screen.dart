@@ -249,6 +249,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
       'bookingRequestActive': true,
       'bookingRequestUpdatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // ✅ Buscar si ya hay disponibilidad para este request y crear alerta.
+    unawaited(_brRepo.notifyIfRequestMatchesSlots(
+      requestId: widget.clientId,
+      clientId: widget.clientId,
+      brData: {
+        'workerId': _brWorkerId,
+        'serviceId': _brServiceId,
+        'durationMin': dur,
+        'preferredDays': List.from(_brDayKeys),
+        'preferredTimeRanges': List.from(_brRanges),
+      },
+    ));
     if (!mounted) return;
     setState(() {
       _looking = true;
@@ -281,8 +294,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) {
         final inset = MediaQuery.of(ctx).viewInsets.bottom;
+        final systemBottom = MediaQuery.of(ctx).padding.bottom;
         return Padding(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset),
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset + systemBottom),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -382,9 +396,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) {
         final inset = MediaQuery.of(ctx).viewInsets.bottom;
+        final systemBottom = MediaQuery.of(ctx).padding.bottom;
         return StatefulBuilder(
           builder: (ctx, setLocal) => Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset + systemBottom),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -474,6 +489,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (ctx) {
         final inset = MediaQuery.of(ctx).viewInsets.bottom;
+        final systemBottom = MediaQuery.of(ctx).padding.bottom;
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             Future<void> save() async {
@@ -525,7 +541,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
             }
 
             return Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + inset + systemBottom),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
