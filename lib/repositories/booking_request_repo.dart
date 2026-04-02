@@ -451,7 +451,233 @@ class BookingRequestRepo {
     return matched.length;
   }
 
-  /// ✅ Borra requests expiradas (si ya pasó la última fecha posible)
+  /// ✅ Cuando se crea/actualiza un booking request, busca si ya hay un slot
+  /// libre que encaje y crea una alerta de tipo 'booking_request_match_found'.
+  ///
+  /// Devuelve true si encontró coincidencia.
+  Future<bool> notifyIfRequestMatchesSlots({
+    required String requestId,
+    required String clientId,
+    required Map<String, dynamic> brData,
+  }) async {
+    try {
+      final preferredDays = (brData['preferredDays'] as List?)
+              ?.map((e) => e.toString())
+              .where((s) => s.trim().isNotEmpty)
+              .toList() ??
+          const <String>[];
+      final rangesRaw = (brData['preferredTimeRanges'] as List?) ?? const [];
+      final durMin = (brData['durationMin'] is num)
+          ? (brData['durationMin'] as num).toInt()
+          : 30;
+      final requestedWorkerId =
+          (brData['workerId'] as String?)?.trim() ?? '';
+
+      if (preferredDays.isEmpty) return false;
+
+      // Cargar appointments activos en los días preferidos.
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final futureDays = preferredDays.where((k) {
+        final d = _parseYyyymmdd(k);
+        return d != null && !d.isBefore(today);
+      }).toList();
+      if (futureDays.isEmpty) return false;
+
+      final dayDates = futureDays
+          .map(_parseYyyymmdd)
+          .whereType<DateTime>()
+          .toList()
+        ..sort();
+
+      final fromTs = Timestamp.fromDate(dayDates.first);
+      final toTs = Timestamp.fromDate(
+          dayDates.last.add(const Duration(days: 1)));
+
+      Query<Map<String, dynamic>> apptQ = db
+          .collection('appointments')
+          .where('status', isEqualTo: 'scheduled')
+          .where('appointmentDate', isGreaterThanOrEqualTo: fromTs)
+          .where('appointmentDate', isLessThan: toTs);
+
+      if (requestedWorkerId.isNotEmpty) {
+        apptQ = apptQ.where('workerId', isEqualTo: requestedWorkerId);
+      }
+
+      final apptSnap = await apptQ.get();
+      final appts = apptSnap.docs;
+
+      // Obtener workers a revisar.
+      List<String> workerIds;
+      if (requestedWorkerId.isNotEmpty) {
+        workerIds = [requestedWorkerId];
+      } else {
+        final ws = await db.collection('workers').get();
+        workerIds = ws.docs.map((d) => d.id).toList();
+        if (workerIds.isEmpty) return false;
+      }
+
+      // Extraer rangos horarios.
+      final ranges = <Map<String, int>>[];
+      if (rangesRaw.isEmpty) {
+        ranges.add({'startMin': 7 * 60, 'endMin': 21 * 60});
+      } else {
+        for (final r in rangesRaw) {
+          if (r is! Map) continue;
+          final m = Map<String, dynamic>.from(r);
+          final s = m['startMin'] ?? m['start'];
+          final e = m['endMin'] ?? m['end'];
+          final sm = s is num ? s.toInt() : int.tryParse('$s') ?? -1;
+          final em = e is num ? e.toInt() : int.tryParse('$e') ?? -1;
+          if (sm >= 0 && em > sm) ranges.add({'startMin': sm, 'endMin': em});
+        }
+      }
+      if (ranges.isEmpty) return false;
+
+      // Buscar el primer slot libre.
+      DateTime? foundSlot;
+      String? foundWorkerId;
+
+      outer:
+      for (final day in dayDates) {
+        final dayKey = BookingRequestUtils.yyyymmdd(day);
+        if (!futureDays.contains(dayKey)) continue;
+
+        final isToday = day.year == now.year &&
+            day.month == now.month &&
+            day.day == now.day;
+        final nowMin = isToday ? (now.hour * 60 + now.minute) : 0;
+
+        for (final wid in workerIds) {
+          for (final r in ranges) {
+            final rsRaw =
+                (r['startMin'] ?? 0) < 7 * 60 ? 7 * 60 : (r['startMin'] ?? 0);
+            final rs = isToday && rsRaw < nowMin ? nowMin : rsRaw;
+            final re = (r['endMin'] ?? 21 * 60) > 21 * 60
+                ? 21 * 60
+                : (r['endMin'] ?? 21 * 60);
+            if (re - rs < durMin) continue;
+
+            for (int s = rs; s + durMin <= re; s += 5) {
+              final endMin = s + durMin;
+              bool ok = true;
+              for (final a in appts) {
+                final data = a.data();
+                if ((data['workerId'] ?? '').toString().trim() != wid)
+                  continue;
+                final ts = data['appointmentDate'];
+                if (ts is! Timestamp) continue;
+                final dt = ts.toDate();
+                if (dt.year != day.year ||
+                    dt.month != day.month ||
+                    dt.day != day.day) continue;
+                final adur = data['durationMin'] is num
+                    ? (data['durationMin'] as num).toInt()
+                    : 0;
+                if (adur <= 0) continue;
+                final a0 = dt.hour * 60 + dt.minute;
+                final a1 = a0 + adur;
+                final overlapS = s > a0 ? s : a0;
+                final overlapE = endMin < a1 ? endMin : a1;
+                if (overlapE > overlapS) {
+                  ok = false;
+                  break;
+                }
+              }
+              if (ok) {
+                foundSlot =
+                    DateTime(day.year, day.month, day.day, s ~/ 60, s % 60);
+                foundWorkerId = wid;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+
+      if (foundSlot == null) return false;
+
+      final dayKey = BookingRequestUtils.yyyymmdd(foundSlot);
+      final dayLabel =
+          BookingRequestUtils.formatYyyyMmDdToDdMmYyyy(dayKey);
+      final hh = foundSlot.hour.toString().padLeft(2, '0');
+      final mm = foundSlot.minute.toString().padLeft(2, '0');
+
+      await _safeAddAlert({
+        'type': 'booking_request_match_found',
+        'clientId': clientId,
+        'requestId': requestId,
+        'title': 'Match encontrado para booking request',
+        'body':
+            'Hay disponibilidad el $dayLabel a las $hh:$mm para ${durMin}min'
+            '${foundWorkerId != null && foundWorkerId!.isNotEmpty ? " (worker: $foundWorkerId)" : ""}.',
+        'slot': {
+          'day': dayKey,
+          'start': Timestamp.fromDate(foundSlot),
+          'durationMin': durMin,
+        },
+        'matchWorkerId': foundWorkerId,
+      });
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// ✅ Cuando se crea un appointment que ocupa un slot, invalida alertas
+  /// previas de tipo 'booking_request_match_found' que apuntaban a ese slot.
+  Future<void> invalidateMatchAlertsForSlot({
+    required DateTime appointmentStart,
+    required int appointmentDurationMin,
+    required String workerId,
+  }) async {
+    try {
+      final dayKey = BookingRequestUtils.yyyymmdd(appointmentStart);
+      final apptStartMin =
+          appointmentStart.hour * 60 + appointmentStart.minute;
+      final apptEndMin = apptStartMin + appointmentDurationMin;
+
+      final snap = await _alerts
+          .where('type', isEqualTo: 'booking_request_match_found')
+          .get();
+
+      final batch = db.batch();
+      bool hasDeletions = false;
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final slot = data['slot'];
+        if (slot is! Map) continue;
+        final slotDay = (slot['day'] ?? '').toString();
+        if (slotDay != dayKey) continue;
+
+        final slotTs = slot['start'];
+        if (slotTs is! Timestamp) continue;
+        final slotDt = slotTs.toDate();
+        final slotMin = slotDt.hour * 60 + slotDt.minute;
+        final slotDur = (slot['durationMin'] is num)
+            ? (slot['durationMin'] as num).toInt()
+            : 30;
+        final slotEnd = slotMin + slotDur;
+
+        // ¿Solapa con el nuevo appointment?
+        final overlapS = apptStartMin > slotMin ? apptStartMin : slotMin;
+        final overlapE = apptEndMin < slotEnd ? apptEndMin : slotEnd;
+        if (overlapE <= overlapS) continue;
+
+        // Worker match: la alerta puede ser para cualquier worker o el mismo.
+        final alertWorker =
+            (data['matchWorkerId'] ?? '').toString().trim();
+        if (alertWorker.isNotEmpty && alertWorker != workerId) continue;
+
+        batch.delete(doc.reference);
+        hasDeletions = true;
+      }
+
+      if (hasDeletions) await batch.commit();
+    } catch (_) {}
+  }
   Future<int> pruneExpiredActiveRequests({String? clientId}) async {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
@@ -535,5 +761,14 @@ class BookingRequestRepo {
     }
 
     return latest;
+  }
+
+  DateTime? _parseYyyymmdd(String s) {
+    if (s.length != 8) return null;
+    final y = int.tryParse(s.substring(0, 4));
+    final mo = int.tryParse(s.substring(4, 6));
+    final d = int.tryParse(s.substring(6, 8));
+    if (y == null || mo == null || d == null) return null;
+    return DateTime(y, mo, d);
   }
 }
