@@ -165,7 +165,7 @@ class AvailabilityService {
     return 30;
   }
 
-  int allowedOverlapMin(int durMin) => durMin > 60 ? 15 : 0;
+  int allowedOverlapMin(int durMin) => 0;
 
   int overlapMin(int a0, int a1, int b0, int b1) {
     final s = a0 > b0 ? a0 : b0;
@@ -207,9 +207,18 @@ class AvailabilityService {
     required int allowedOverlap,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> appts,
   }) {
+    // Si el día es hoy, no ofrecer slots que ya pasaron.
+    final now = DateTime.now();
+    final isToday = day.year == now.year &&
+        day.month == now.month &&
+        day.day == now.day;
+    final nowMin = isToday ? (now.hour * 60 + now.minute) : 0;
+
     for (final r in ranges) {
-      final rs = ((r['startMin'] ?? 0) < bizStartMin
+      final rsRaw = ((r['startMin'] ?? 0) < bizStartMin
           ? bizStartMin : (r['startMin'] ?? 0));
+      // Para hoy: el inicio del rango nunca puede ser antes del minuto actual.
+      final rs = isToday && rsRaw < nowMin ? nowMin : rsRaw;
       final re = ((r['endMin'] ?? 24 * 60) > bizEndMax
           ? bizEndMax : (r['endMin'] ?? 24 * 60));
       if (re - rs < durMin) continue;
