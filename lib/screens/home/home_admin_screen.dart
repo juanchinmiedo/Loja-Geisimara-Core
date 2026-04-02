@@ -211,26 +211,46 @@ class _HomeAdminScreenState extends State<HomeAdminScreen> {
     );
   }
 
+  // Timestamp del momento en que se abrió el panel por última vez (en memoria).
+  // Persiste en el ciclo de vida del State; se resetea al reiniciar la app.
+  DateTime? _lastReadAt;
+
   // ── Bell button ───────────────────────────────────────────────────────────────
   Widget _buildBellButton() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('clients')
-          .doc('__system__')
+          .doc('_system')
           .collection('history')
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
       builder: (context, snapA) {
-        final count = snapA.data?.docs.length ?? 0;
+        final docs = snapA.data?.docs ?? [];
+        final count = docs.length;
+
+        // Hay "no leídas" si existe alguna notif cuyo createdAt > _lastReadAt.
+        bool hasUnread = false;
+        if (count > 0 && docs.isNotEmpty) {
+          final newest = docs.first.data()['createdAt'];
+          if (newest is Timestamp) {
+            final newestDt = newest.toDate();
+            hasUnread = _lastReadAt == null || newestDt.isAfter(_lastReadAt!);
+          }
+        }
+
         return HeaderActionButton(
           icon: Icons.notifications_active_outlined,
           badgeCount: count,
-          onTap: () => AdminNotificationsOverlay.show(
-            context,
-            onOpenClient: (clientId) =>
-                context.read<AdminNavProvider>().goToClientsAndOpen(clientId),
-          ),
+          hasUnread: hasUnread,
+          onTap: () {
+            setState(() => _lastReadAt = DateTime.now());
+            AdminNotificationsOverlay.show(
+              context,
+              onOpenClient: (clientId) =>
+                  context.read<AdminNavProvider>().goToClientsAndOpen(clientId),
+            );
+          },
         );
       },
     );
