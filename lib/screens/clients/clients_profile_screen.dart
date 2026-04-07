@@ -20,6 +20,7 @@ import 'package:salon_app/components/ui/app_section_card.dart';
 import 'package:salon_app/generated/l10n.dart';
 import 'package:salon_app/provider/admin_nav_provider.dart';
 import 'package:salon_app/services/audit_service.dart';
+import 'package:salon_app/services/client_service.dart';
 import 'package:salon_app/repositories/booking_request_repo.dart';
 import 'package:salon_app/utils/localization_helper.dart';
 import 'package:salon_app/services/availability_service.dart';
@@ -366,20 +367,59 @@ class _ClientProfileScreenState extends State<ClientProfileScreen>
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: () async {
+                      final fn      = _fnCtrl.text.trim();
+                      final ln      = _lnCtrl.text.trim();
+                      final country = int.tryParse(_countryCtrl.text.trim()) ?? 0;
+                      final phone   = int.tryParse(_phoneCtrl.text.trim()) ?? 0;
+                      final ig      = _igCtrl.text.trim().toLowerCase()
+                          .replaceAll('@', '').replaceAll(RegExp(r'\s+'), '');
+                      final newFullName = '$fn $ln'.trim();
+
+                      // Regenerar tokens de búsqueda con los datos nuevos.
+                      final ClientService _clientSvc = ClientService(FirebaseFirestore.instance);
+                      final newSearch = _clientSvc.buildSearchTokens(
+                        firstName: fn,
+                        lastName:  ln,
+                        country:   country,
+                        phone:     phone,
+                        instagram: ig,
+                      );
+
                       await FirebaseFirestore.instance
                           .collection('clients').doc(widget.clientId).set({
-                        'firstName': _fnCtrl.text.trim(),
-                        'lastName':  _lnCtrl.text.trim(),
-                        'country':   int.tryParse(_countryCtrl.text.trim()) ?? 0,
-                        'phone':     int.tryParse(_phoneCtrl.text.trim()) ?? 0,
-                        'instagram': _igCtrl.text.trim(),
+                        'firstName': fn,
+                        'lastName':  ln,
+                        'country':   country,
+                        'phone':     phone,
+                        'instagram': ig,
+                        'search':    newSearch,
                         'updatedAt': FieldValue.serverTimestamp(),
                       }, SetOptions(merge: true));
+
+                      // Actualizar clientName en todos los appointments de este cliente.
+                      unawaited(() async {
+                        try {
+                          final apptSnap = await FirebaseFirestore.instance
+                              .collection('appointments')
+                              .where('clientId', isEqualTo: widget.clientId)
+                              .get();
+                          if (apptSnap.docs.isEmpty) return;
+                          final batch = FirebaseFirestore.instance.batch();
+                          for (final doc in apptSnap.docs) {
+                            batch.update(doc.reference, {
+                              'clientName': newFullName,
+                              'updatedAt':  FieldValue.serverTimestamp(),
+                            });
+                          }
+                          await batch.commit();
+                        } catch (_) {}
+                      }());
+
                       if (!ctx.mounted) return;
                       // ── Audit log ─────────────────────────────────────
                       unawaited(AuditService().logClientEdited(
                         clientId: widget.clientId,
-                        clientName: _fullName(),
+                        clientName: newFullName,
                       ));
 
                       Navigator.pop(ctx);
